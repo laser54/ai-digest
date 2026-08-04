@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validatePublicHttpUrl } from '../src/url-policy.js';
 import { normalizeAgentResult, filterArticlesByDate } from '../src/digest-result.js';
-import { codexThreadOptions } from '../src/digest-agent.js';
+import { codexThreadOptions, codexOutputSchema } from '../src/digest-agent.js';
 
 test('runs Codex from a container checkout without requiring a Git directory', () => {
   assert.equal(codexThreadOptions().skipGitRepoCheck, true);
@@ -11,6 +11,10 @@ test('runs Codex from a container checkout without requiring a Git directory', (
 test('enables Codex web tools for source discovery', () => {
   assert.equal(codexThreadOptions().networkAccessEnabled, true);
   assert.equal(codexThreadOptions().webSearchEnabled, true);
+});
+
+test('declares every Codex candidate schema field as required', () => {
+  assert.deepEqual(codexOutputSchema().properties.candidates.items.required, ['url', 'title', 'publishedAt', 'reason']);
 });
 
 test('rejects non-public and credential-bearing source URLs before fetching', async () => {
