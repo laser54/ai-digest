@@ -1,26 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBasicAuth } from '../src/auth.js';
+import { createExecutionAuth } from '../src/auth.js';
 
 function response() {
   return {
     statusCode: 0,
-    headers: {},
+    body: null,
     status(code) { this.statusCode = code; return this; },
-    set(name, value) { this.headers[name] = value; return this; },
-    end() { this.ended = true; }
+    json(body) { this.body = body; return this; }
   };
 }
 
-test('requires the configured password for every browser/API request', () => {
-  const auth = createBasicAuth('correct horse battery staple');
+test('protects only an AI execution request with the configured password header', () => {
+  const auth = createExecutionAuth('separate shared password');
   const denied = response();
   auth({ headers: {} }, denied, () => assert.fail('must not continue'));
   assert.equal(denied.statusCode, 401);
-  assert.equal(denied.headers['WWW-Authenticate'], 'Basic realm="AI Digest"');
+  assert.deepEqual(denied.body, { error: 'Введите пароль для запуска AI-отбора.' });
 
   const allowed = response();
   let continued = false;
-  auth({ headers: { authorization: `Basic ${Buffer.from('sergey:correct horse battery staple').toString('base64')}` } }, allowed, () => { continued = true; });
+  auth({ headers: { 'x-ai-digest-password': 'separate shared password' } }, allowed, () => { continued = true; });
   assert.equal(continued, true);
 });

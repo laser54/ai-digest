@@ -28,7 +28,10 @@ form.addEventListener('submit', async (event) => {
   review.hidden = true;
   result.hidden = true;
   try {
-    const response = await fetch('/api/digest/prepare', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+    const response = await fetch('/api/digest/prepare', { method: 'POST', headers: {
+      'content-type': 'application/json',
+      'x-ai-digest-password': document.querySelector('#execution-password').value
+    }, body: JSON.stringify({
       sourceUrls: document.querySelector('#sources').value.split(/\n|,/).map((url) => url.trim()).filter(Boolean),
       themes: document.querySelector('#themes').value.split(',').map((theme) => theme.trim()).filter(Boolean),
       from: document.querySelector('#from').value,

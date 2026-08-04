@@ -23,7 +23,7 @@ npm start
 
 Production Compose is `deploy/docker-compose.production.yml`. It attaches only to the external `rag-stack_internal` Docker network and Traefik publishes it; the app port is not exposed on the host.
 
-The public instance requires HTTP Basic authentication. Runtime-only host assets are:
+The public interface and health endpoint are visible, but every AI execution requires a separate shared password entered in the form. Runtime-only host assets are:
 
 - `/etc/ai-digest/ai-digest.env` — `root:root`, mode `0600`; contains `ADMIN_PASSWORD`.
 - `/var/lib/ai-digest/codex/` — owned by the container `node` user, mode `0700`; contains private, refreshable Codex `auth.json` state. It is not copied into the image or Git.
