@@ -1,0 +1,21 @@
+{
+  "name": "ai-digest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal personal AI news-digest workspace powered by the Codex SDK",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test test/**/*.test.js"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "^0.145.0",
+    "cheerio": "^1.1.2",
+    "express": "^5.1.0",
+    "zod": "^3.24.2"
+  }
+}

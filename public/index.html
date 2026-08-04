@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Digest</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>AI Digest</h1>
+      <p class="lead">Источники → AI-кандидаты → ваш выбор → готовый список ссылок.</p>
+      <form id="digest-form">
+        <label>Ссылки на новости или разделы <textarea id="sources" required placeholder="https://example.com/news\nhttps://example.org/article"></textarea></label>
+        <label>Тематики <input id="themes" placeholder="AI, продукты, разработка" /></label>
+        <div class="dates"><label>От <input id="from" type="date" /></label><label>До <input id="to" type="date" /></label></div>
+        <button id="prepare" type="submit">Найти кандидатов</button>
+      </form>
+      <p id="status" role="status"></p>
+      <section id="review" hidden>
+        <div class="section-head"><h2>Кандидаты</h2><button id="auto" type="button">Сформировать автоматически</button></div>
+        <p>Проверьте материалы и отметьте те, которые войдут в ваш дайджест.</p>
+        <div id="candidates"></div>
+        <button id="manual" type="button">Сформировать из отмеченных</button>
+      </section>
+      <section id="result" hidden><h2>Готовый дайджест</h2><ul id="digest-links"></ul></section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
