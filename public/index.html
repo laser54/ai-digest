@@ -21,7 +21,12 @@
         <div id="source-list" aria-live="polite"></div>
       </section>
       <form id="digest-form">
-        <label>Тематики <input id="themes" placeholder="AI, продукты, разработка" /></label>
+        <div class="theme-workspace">
+          <label for="theme-input">Тематики</label>
+          <div class="theme-add"><input id="theme-input" placeholder="AI, продукты, разработка" /><button id="add-theme" type="button">Добавить</button></div>
+          <p id="theme-empty">Добавьте тематики, чтобы AI учитывал их при отборе.</p>
+          <div id="theme-list" aria-label="Выбранные тематики" aria-live="polite"></div>
+        </div>
         <label>Пароль для AI-отбора <input id="execution-password" type="password" required autocomplete="current-password" /></label>
         <div class="dates"><label>От <input id="from" type="date" /></label><label>До <input id="to" type="date" /></label></div>
         <button id="prepare" type="submit">Найти кандидатов</button>

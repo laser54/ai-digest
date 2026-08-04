@@ -1,4 +1,5 @@
 import { loadSources, saveSources, sourceUrlsForDigest } from './source-workspace.js';
+import { loadThemes, saveThemes, themesForDigest } from './theme-workspace.js';
 
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
@@ -9,9 +10,13 @@ const links = document.querySelector('#digest-links');
 let articles = [];
 let automaticDigestUrls = [];
 let sources = loadSources(localStorage);
+let themes = loadThemes(localStorage);
 
 const sourceList = document.querySelector('#source-list');
 const sourceEmpty = document.querySelector('#source-empty');
+const themeList = document.querySelector('#theme-list');
+const themeEmpty = document.querySelector('#theme-empty');
+const themeInput = document.querySelector('#theme-input');
 
 const persistSources = (nextSources) => {
   sources = saveSources(localStorage, nextSources);
@@ -41,6 +46,29 @@ const renderSources = () => {
   }));
 };
 
+const persistThemes = (nextThemes) => {
+  themes = saveThemes(localStorage, nextThemes);
+  renderThemes();
+};
+
+const renderThemes = () => {
+  themeEmpty.hidden = themes.length > 0;
+  themeList.className = 'theme-list';
+  themeList.replaceChildren(...themes.map((theme) => {
+    const tag = document.createElement('span');
+    tag.className = 'theme-tag';
+    const label = document.createElement('span');
+    label.textContent = theme;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.setAttribute('aria-label', `Удалить тематику ${theme}`);
+    remove.textContent = '×';
+    remove.addEventListener('click', () => persistThemes(themes.filter((entry) => entry !== theme)));
+    tag.append(label, remove);
+    return tag;
+  }));
+};
+
 document.querySelector('#source-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const input = document.querySelector('#source-url');
@@ -51,6 +79,22 @@ document.querySelector('#source-form').addEventListener('submit', (event) => {
 });
 
 renderSources();
+renderThemes();
+
+const addTheme = () => {
+  const nextThemes = themesForDigest([...themes, themeInput.value]);
+  if (nextThemes.length === themes.length) return;
+  persistThemes(nextThemes);
+  themeInput.value = '';
+  themeInput.focus();
+};
+
+document.querySelector('#add-theme').addEventListener('click', addTheme);
+themeInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  addTheme();
+});
 
 const renderDigest = (urls) => {
   const selected = articles.filter((article) => urls.includes(article.url));
@@ -80,7 +124,7 @@ form.addEventListener('submit', async (event) => {
       'x-ai-digest-password': document.querySelector('#execution-password').value
     }, body: JSON.stringify({
       sourceUrls,
-      themes: document.querySelector('#themes').value.split(',').map((theme) => theme.trim()).filter(Boolean),
+      themes: themesForDigest(themes),
       from: document.querySelector('#from').value,
       to: document.querySelector('#to').value
     }) });
