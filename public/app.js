@@ -1,3 +1,5 @@
+import { loadSources, saveSources, sourceUrlsForDigest } from './source-workspace.js';
+
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
 const review = document.querySelector('#review');
@@ -6,6 +8,49 @@ const result = document.querySelector('#result');
 const links = document.querySelector('#digest-links');
 let articles = [];
 let automaticDigestUrls = [];
+let sources = loadSources(localStorage);
+
+const sourceList = document.querySelector('#source-list');
+const sourceEmpty = document.querySelector('#source-empty');
+
+const persistSources = (nextSources) => {
+  sources = saveSources(localStorage, nextSources);
+  renderSources();
+};
+
+const renderSources = () => {
+  sourceEmpty.hidden = sources.length > 0;
+  sourceList.replaceChildren(...sources.map((source) => {
+    const row = document.createElement('div');
+    row.className = 'source-row';
+    const label = document.createElement('label');
+    const enabled = document.createElement('input');
+    enabled.type = 'checkbox';
+    enabled.checked = source.enabled;
+    enabled.addEventListener('change', () => persistSources(sources.map((entry) => entry.url === source.url ? { ...entry, enabled: enabled.checked } : entry)));
+    const url = document.createElement('span');
+    url.textContent = source.url;
+    label.append(enabled, url);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'remove-source';
+    remove.textContent = 'Удалить';
+    remove.addEventListener('click', () => persistSources(sources.filter((entry) => entry.url !== source.url)));
+    row.append(label, remove);
+    return row;
+  }));
+};
+
+document.querySelector('#source-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const input = document.querySelector('#source-url');
+  const url = input.value.trim();
+  if (!url || sources.some((source) => source.url === url)) return;
+  persistSources([...sources, { url, enabled: true }]);
+  input.value = '';
+});
+
+renderSources();
 
 const renderDigest = (urls) => {
   const selected = articles.filter((article) => urls.includes(article.url));
@@ -28,11 +73,13 @@ form.addEventListener('submit', async (event) => {
   review.hidden = true;
   result.hidden = true;
   try {
+    const sourceUrls = sourceUrlsForDigest(sources);
+    if (!sourceUrls.length) throw new Error('Включите хотя бы один источник для AI-отбора.');
     const response = await fetch('/api/digest/prepare', { method: 'POST', headers: {
       'content-type': 'application/json',
       'x-ai-digest-password': document.querySelector('#execution-password').value
     }, body: JSON.stringify({
-      sourceUrls: document.querySelector('#sources').value.split(/\n|,/).map((url) => url.trim()).filter(Boolean),
+      sourceUrls,
       themes: document.querySelector('#themes').value.split(',').map((theme) => theme.trim()).filter(Boolean),
       from: document.querySelector('#from').value,
       to: document.querySelector('#to').value

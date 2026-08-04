@@ -10,8 +10,17 @@
     <main>
       <h1>AI Digest</h1>
       <p class="lead">Источники → AI-кандидаты → ваш выбор → готовый список ссылок.</p>
+      <section class="sources-workspace" aria-labelledby="sources-heading">
+        <div class="section-head"><h2 id="sources-heading">Источники</h2></div>
+        <p>Добавляйте только одобренные вами ссылки. Отключённые источники сохраняются, но не участвуют в следующем запуске.</p>
+        <form id="source-form" class="source-form">
+          <label for="source-url">Ссылка на новость или раздел</label>
+          <div class="source-add"><input id="source-url" type="url" required placeholder="https://example.com/news" /><button type="submit">Добавить</button></div>
+        </form>
+        <p id="source-empty">Добавьте хотя бы один источник для AI-отбора.</p>
+        <div id="source-list" aria-live="polite"></div>
+      </section>
       <form id="digest-form">
-        <label>Ссылки на новости или разделы <textarea id="sources" required placeholder="https://example.com/news\nhttps://example.org/article"></textarea></label>
         <label>Тематики <input id="themes" placeholder="AI, продукты, разработка" /></label>
         <label>Пароль для AI-отбора <input id="execution-password" type="password" required autocomplete="current-password" /></label>
         <div class="dates"><label>От <input id="from" type="date" /></label><label>До <input id="to" type="date" /></label></div>
