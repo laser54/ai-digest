@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { fetchArticles } from './article-fetcher.js';
 import { rankArticlesWithCodex } from './digest-agent.js';
 import { filterArticlesByDate } from './digest-result.js';
+import { createBasicAuth } from './auth.js';
 
 const requestSchema = z.object({
   sourceUrls: z.array(z.string().url()).min(1).max(10),
@@ -14,6 +15,10 @@ const requestSchema = z.object({
 });
 
 const app = express();
+if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
+  throw new Error('ADMIN_PASSWORD is required in production');
+}
+if (process.env.ADMIN_PASSWORD) app.use(createBasicAuth(process.env.ADMIN_PASSWORD));
 app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '../public')));
 

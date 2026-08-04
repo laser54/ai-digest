@@ -19,6 +19,17 @@ npm start
 
 Для работы AI-шага серверу нужна действующая авторизация Codex CLI/SDK в его runtime-пользователе. Не задавайте секреты через браузер и не коммитьте их в репозиторий.
 
+## Production at `ai-digest.larin.work`
+
+Production Compose is `deploy/docker-compose.production.yml`. It attaches only to the external `rag-stack_internal` Docker network and Traefik publishes it; the app port is not exposed on the host.
+
+The public instance requires HTTP Basic authentication. Runtime-only host assets are:
+
+- `/etc/ai-digest/ai-digest.env` — `root:root`, mode `0600`; contains `ADMIN_PASSWORD`.
+- `/var/lib/ai-digest/codex/` — owned by the container `node` user, mode `0700`; contains private, refreshable Codex `auth.json` state. It is not copied into the image or Git.
+
+The DNS `A`/`AAAA` record must resolve to the Traefik VPS before first deployment so Let's Encrypt can issue a certificate. The container runs as the unprivileged Node user with a read-only root filesystem, small `/tmp`, dropped Linux capabilities and no host port.
+
 ## Проверка
 
 ```bash

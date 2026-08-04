@@ -1,0 +1,47 @@
+services:
+  app:
+    image: ai-digest:local
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - /etc/ai-digest/ai-digest.env
+    environment:
+      NODE_ENV: production
+      PORT: 3030
+      HOME: /codex
+      CODEX_HOME: /codex
+    volumes:
+      - /var/lib/ai-digest/codex:/codex
+    networks:
+      - rag-stack_internal
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=rag-stack_internal
+      - traefik.http.routers.ai-digest-http.rule=Host(`ai-digest.larin.work`)
+      - traefik.http.routers.ai-digest-http.entrypoints=web
+      - traefik.http.routers.ai-digest-http.middlewares=to-https@docker
+      - traefik.http.routers.ai-digest.rule=Host(`ai-digest.larin.work`)
+      - traefik.http.routers.ai-digest.entrypoints=websecure
+      - traefik.http.routers.ai-digest.tls=true
+      - traefik.http.routers.ai-digest.tls.certresolver=le
+      - traefik.http.services.ai-digest.loadbalancer.server.port=3030
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3030/api/health', { headers: { authorization: 'Basic ' + Buffer.from('probe:' + process.env.ADMIN_PASSWORD).toString('base64') } }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  rag-stack_internal:
+    external: true
