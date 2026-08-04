@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validatePublicHttpUrl } from '../src/url-policy.js';
 import { normalizeAgentResult, filterArticlesByDate } from '../src/digest-result.js';
+import { codexThreadOptions } from '../src/digest-agent.js';
+
+test('runs Codex from a container checkout without requiring a Git directory', () => {
+  assert.equal(codexThreadOptions().skipGitRepoCheck, true);
+});
 
 test('rejects non-public and credential-bearing source URLs before fetching', async () => {
   await assert.rejects(() => validatePublicHttpUrl('http://127.0.0.1/admin'));
