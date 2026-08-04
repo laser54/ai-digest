@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { validatePublicHttpUrl } from '../src/url-policy.js';
 import { normalizeAgentResult, filterArticlesByDate } from '../src/digest-result.js';
 import { codexThreadOptions, codexOutputSchema } from '../src/digest-agent.js';
+import { discoverDigest } from '../src/discovery.js';
 
 test('runs Codex from a container checkout without requiring a Git directory', () => {
   assert.equal(codexThreadOptions().skipGitRepoCheck, true);
@@ -67,4 +68,32 @@ test('keeps dated articles within the requested inclusive date window and retain
     { title: 'Unknown date', url: 'https://example.com/unknown', publishedAt: null }
   ];
   assert.deepEqual(filterArticlesByDate(articles, '2026-08-01', '2026-08-03').map(({ title }) => title), ['Current', 'Unknown date']);
+});
+
+test('discovery treats safe prefetch as an optional signal and reports UI progress around approved-host Codex research', async () => {
+  const events = [];
+  const input = {
+    sourceUrls: ['https://example.com/news'],
+    themes: ['AI'],
+    from: '2026-08-01',
+    to: '2026-08-03'
+  };
+  const digest = await discoverDigest(input, {
+    prefetchArticles: async () => { throw new Error('source unavailable'); },
+    researchWithCodex: async (request) => {
+      assert.deepEqual(request.sourceUrls, input.sourceUrls);
+      assert.deepEqual(request.articles, []);
+      return {
+        candidates: [{ title: 'Verified', url: 'https://example.com/news/verified', publishedAt: '2026-08-02', reason: 'AI' }],
+        automaticDigestUrls: ['https://example.com/news/verified']
+      };
+    }
+  }, (event) => events.push(event));
+
+  assert.deepEqual(events, [
+    { phase: 'prefetching' },
+    { phase: 'researching', sourceHosts: ['example.com'] },
+    { phase: 'complete', candidateCount: 1 }
+  ]);
+  assert.equal(digest.candidates[0].url, 'https://example.com/news/verified');
 });

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { fetchArticles } from './article-fetcher.js';
 import { validatePublicHttpUrl } from './url-policy.js';
 import { rankArticlesWithCodex } from './digest-agent.js';
-import { filterArticlesByDate } from './digest-result.js';
+import { discoverDigest } from './discovery.js';
 import { createExecutionAuth } from './auth.js';
 
 const requestSchema = z.object({
@@ -26,11 +26,12 @@ app.post('/api/digest/prepare', createExecutionAuth(process.env.ADMIN_PASSWORD),
   try {
     const input = requestSchema.parse(req.body);
     await Promise.all(input.sourceUrls.map(validatePublicHttpUrl));
-    let fetched = [];
-    try { fetched = await fetchArticles(input.sourceUrls); } catch { /* Codex web research remains available when server fetch fails. */ }
-    const articles = filterArticlesByDate(fetched, input.from, input.to);
-    const digest = await rankArticlesWithCodex({ ...input, articles });
-    res.json({ articles: digest.candidates, automaticDigestUrls: digest.automaticDigestUrls });
+    const progress = [];
+    const digest = await discoverDigest(input, {
+      prefetchArticles: fetchArticles,
+      researchWithCodex: rankArticlesWithCodex
+    }, (event) => progress.push(event));
+    res.json({ articles: digest.candidates, automaticDigestUrls: digest.automaticDigestUrls, progress });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : 'Не удалось подготовить дайджест' });
   }
