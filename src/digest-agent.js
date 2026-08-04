@@ -12,22 +12,22 @@ export function codexThreadOptions() {
     skipGitRepoCheck: true,
     approvalPolicy: 'never',
     sandboxMode: 'read-only',
-    networkAccessEnabled: false,
-    webSearchEnabled: false
+    networkAccessEnabled: true,
+    webSearchEnabled: true
   };
 }
 
-export async function rankArticlesWithCodex({ articles, themes, from, to }) {
+export async function rankArticlesWithCodex({ articles, sourceUrls, themes, from, to }) {
   const { Codex } = await import('@openai/codex-sdk');
   const thread = new Codex().startThread(codexThreadOptions());
-  const prompt = `You are a careful personal news editor. Select articles only from the supplied JSON array.\nThemes: ${themes.join(', ') || 'all topics'}.\nDate window: ${from || 'no lower bound'} through ${to || 'no upper bound'}.\nSelect up to 12 candidates and up to 7 automaticDigestUrls. Never invent URLs or titles.\nArticles: ${JSON.stringify(articles)}`;
+  const prompt = `You are a careful personal news editor. Use your web tools to research recent news only from the user-approved source URLs and their exact hostnames. Sources: ${JSON.stringify(sourceUrls)}. Themes: ${themes.join(', ') || 'all topics'}. Date window: ${from || 'no lower bound'} through ${to || 'no upper bound'}. You may use the pre-fetched candidates below, but do not stop if they are empty. Return up to 12 real, directly verified article URLs from the approved hosts only, with their exact titles and publication dates when available. Never invent URLs, titles, or dates.\nPre-fetched articles: ${JSON.stringify(articles)}`;
   const result = await thread.run(prompt, { outputSchema: {
     type: 'object', additionalProperties: false,
     required: ['candidates', 'automaticDigestUrls'],
     properties: {
-      candidates: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['url', 'reason'], properties: { url: { type: 'string' }, reason: { type: 'string' } } } },
+      candidates: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['url', 'title', 'reason'], properties: { url: { type: 'string' }, title: { type: 'string' }, publishedAt: { type: 'string' }, reason: { type: 'string' } } } },
       automaticDigestUrls: { type: 'array', items: { type: 'string' } }
     }
   } });
-  return normalizeAgentResult(extractJson(result.finalResponse), articles);
+  return normalizeAgentResult(extractJson(result.finalResponse), articles, sourceUrls);
 }

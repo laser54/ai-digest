@@ -8,6 +8,11 @@ test('runs Codex from a container checkout without requiring a Git directory', (
   assert.equal(codexThreadOptions().skipGitRepoCheck, true);
 });
 
+test('enables Codex web tools for source discovery', () => {
+  assert.equal(codexThreadOptions().networkAccessEnabled, true);
+  assert.equal(codexThreadOptions().webSearchEnabled, true);
+});
+
 test('rejects non-public and credential-bearing source URLs before fetching', async () => {
   await assert.rejects(() => validatePublicHttpUrl('http://127.0.0.1/admin'));
   await assert.rejects(() => validatePublicHttpUrl('http://169.254.169.254/latest/meta-data'));
@@ -35,6 +40,20 @@ test('normalizes an agent response to unique candidates from fetched articles on
     { title: 'Second', url: 'https://example.com/second', publishedAt: '2026-08-02', reason: 'Relevant too' }
   ]);
   assert.deepEqual(result.automaticDigestUrls, ['https://example.com/second']);
+});
+
+test('keeps Codex-discovered articles only when their host was explicitly supplied by the user', () => {
+  const result = normalizeAgentResult({
+    candidates: [
+      { title: 'Official news', url: 'https://rosenergo.gov.ru/press-center/news/item-1', publishedAt: '2026-08-03', reason: 'Relevant' },
+      { title: 'Untrusted mirror', url: 'https://example.org/copied-item', reason: 'No' }
+    ],
+    automaticDigestUrls: ['https://rosenergo.gov.ru/press-center/news/item-1', 'https://example.org/copied-item']
+  }, [], ['https://rosenergo.gov.ru/press-center/news']);
+  assert.deepEqual(result.candidates, [{
+    title: 'Official news', url: 'https://rosenergo.gov.ru/press-center/news/item-1', publishedAt: '2026-08-03', reason: 'Relevant'
+  }]);
+  assert.deepEqual(result.automaticDigestUrls, ['https://rosenergo.gov.ru/press-center/news/item-1']);
 });
 
 test('keeps dated articles within the requested inclusive date window and retains undated candidates', () => {

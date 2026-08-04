@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { z } from 'zod';
 import { fetchArticles } from './article-fetcher.js';
+import { validatePublicHttpUrl } from './url-policy.js';
 import { rankArticlesWithCodex } from './digest-agent.js';
 import { filterArticlesByDate } from './digest-result.js';
 import { createExecutionAuth } from './auth.js';
@@ -24,9 +25,10 @@ app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '
 app.post('/api/digest/prepare', createExecutionAuth(process.env.ADMIN_PASSWORD), async (req, res) => {
   try {
     const input = requestSchema.parse(req.body);
-    const fetched = await fetchArticles(input.sourceUrls);
+    await Promise.all(input.sourceUrls.map(validatePublicHttpUrl));
+    let fetched = [];
+    try { fetched = await fetchArticles(input.sourceUrls); } catch { /* Codex web research remains available when server fetch fails. */ }
     const articles = filterArticlesByDate(fetched, input.from, input.to);
-    if (!articles.length) return res.status(422).json({ error: 'По этим источникам и датам не нашлось ссылок на статьи.' });
     const digest = await rankArticlesWithCodex({ ...input, articles });
     res.json({ articles: digest.candidates, automaticDigestUrls: digest.automaticDigestUrls });
   } catch (error) {
