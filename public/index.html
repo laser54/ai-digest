@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI Digest</title>
     <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .discovery-progress { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; margin-top: 16px; padding: 14px 16px; border: 1px solid #3e6588; border-radius: 10px; background: #13243a; color: #dceaf8; }
+      .discovery-progress::before { content: ''; width: 10px; height: 10px; border: 3px solid #63d6a1; border-right-color: transparent; border-radius: 50%; animation: discovery-spin 0.9s linear infinite; }
+      .discovery-progress[data-phase="complete"]::before { animation: none; border-color: #63d6a1; background: #63d6a1; box-sizing: border-box; }
+      .discovery-progress[data-phase="error"] { border-color: #d77b7b; color: #ffdada; }
+      .discovery-progress[data-phase="error"]::before { animation: none; border-color: #d77b7b; background: #d77b7b; box-sizing: border-box; }
+      @keyframes discovery-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .discovery-progress::before { animation: none; } }
+    </style>
   </head>
   <body>
     <main>
@@ -31,6 +40,9 @@
         <div class="dates"><label>От <input id="from" type="date" /></label><label>До <input id="to" type="date" /></label></div>
         <button id="prepare" type="submit">Найти кандидатов</button>
       </form>
+      <aside id="discovery-progress" class="discovery-progress" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <span aria-hidden="true"></span><span id="discovery-progress-detail"></span>
+      </aside>
       <p id="status" role="status"></p>
       <section id="review" hidden>
         <div class="section-head"><h2>Кандидаты</h2><button id="auto" type="button">Сформировать автоматически</button></div>

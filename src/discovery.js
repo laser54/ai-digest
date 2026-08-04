@@ -5,7 +5,8 @@ function sourceHosts(sourceUrls) {
 }
 
 export async function discoverDigest(input, { prefetchArticles, researchWithCodex }, onProgress = () => {}) {
-  onProgress({ phase: 'prefetching' });
+  const sourceCount = input.sourceUrls.length;
+  onProgress({ phase: 'prefetching', sourceCount });
   let fetchedArticles = [];
   try {
     fetchedArticles = await prefetchArticles(input.sourceUrls);
@@ -14,8 +15,9 @@ export async function discoverDigest(input, { prefetchArticles, researchWithCode
   }
 
   const articles = filterArticlesByDate(fetchedArticles, input.from, input.to);
-  onProgress({ phase: 'researching', sourceHosts: sourceHosts(input.sourceUrls) });
+  onProgress({ phase: 'prefetched', sourceCount, candidateLinkCount: articles.length });
+  onProgress({ phase: 'researching', sourceCount, candidateLinkCount: articles.length, sourceHosts: sourceHosts(input.sourceUrls) });
   const digest = await researchWithCodex({ ...input, articles });
-  onProgress({ phase: 'complete', candidateCount: digest.candidates.length });
+  onProgress({ phase: 'complete', sourceCount, candidateCount: digest.candidates.length });
   return digest;
 }

@@ -7,6 +7,7 @@ import { validatePublicHttpUrl } from './url-policy.js';
 import { rankArticlesWithCodex } from './digest-agent.js';
 import { discoverDigest } from './discovery.js';
 import { createExecutionAuth } from './auth.js';
+import { encodeDigestStreamEvent } from './digest-stream.js';
 
 const requestSchema = z.object({
   sourceUrls: z.array(z.string().url()).min(1).max(10),
@@ -27,12 +28,25 @@ app.post('/api/digest/prepare', createExecutionAuth(process.env.ADMIN_PASSWORD),
     const input = requestSchema.parse(req.body);
     await Promise.all(input.sourceUrls.map(validatePublicHttpUrl));
     const progress = [];
+    res.type('application/x-ndjson');
+    res.flushHeaders();
     const digest = await discoverDigest(input, {
       prefetchArticles: fetchArticles,
       researchWithCodex: rankArticlesWithCodex
-    }, (event) => progress.push(event));
-    res.json({ articles: digest.candidates, automaticDigestUrls: digest.automaticDigestUrls, progress });
+    }, (event) => {
+      progress.push(event);
+      res.write(encodeDigestStreamEvent('progress', event));
+    });
+    res.end(encodeDigestStreamEvent('result', {
+      articles: digest.candidates,
+      automaticDigestUrls: digest.automaticDigestUrls,
+      progress
+    }));
   } catch (error) {
+    if (res.headersSent) {
+      res.end(encodeDigestStreamEvent('error', { error: error instanceof Error ? error.message : 'Не удалось подготовить дайджест' }));
+      return;
+    }
     res.status(400).json({ error: error instanceof Error ? error.message : 'Не удалось подготовить дайджест' });
   }
 });

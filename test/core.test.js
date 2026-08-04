@@ -89,7 +89,7 @@ test('keeps dated articles within the requested inclusive date window and retain
   assert.deepEqual(filterArticlesByDate(articles, '2026-08-01', '2026-08-03').map(({ title }) => title), ['Current', 'Unknown date']);
 });
 
-test('discovery treats safe prefetch as an optional signal and reports UI progress around approved-host Codex research', async () => {
+test('discovery reports determinate source and candidate-link progress without estimating opaque Codex work', async () => {
   const events = [];
   const input = {
     sourceUrls: ['https://example.com/news'],
@@ -110,9 +110,10 @@ test('discovery treats safe prefetch as an optional signal and reports UI progre
   }, (event) => events.push(event));
 
   assert.deepEqual(events, [
-    { phase: 'prefetching' },
-    { phase: 'researching', sourceHosts: ['example.com'] },
-    { phase: 'complete', candidateCount: 1 }
+    { phase: 'prefetching', sourceCount: 1 },
+    { phase: 'prefetched', sourceCount: 1, candidateLinkCount: 0 },
+    { phase: 'researching', sourceCount: 1, candidateLinkCount: 0, sourceHosts: ['example.com'] },
+    { phase: 'complete', sourceCount: 1, candidateCount: 1 }
   ]);
   assert.equal(digest.candidates[0].url, 'https://example.com/news/verified');
 });

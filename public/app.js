@@ -1,5 +1,7 @@
 import { loadSources, saveSources, sourceUrlsForDigest } from './source-workspace.js';
 import { loadThemes, saveThemes, themesForDigest } from './theme-workspace.js';
+import { discoveryProgressMessage } from './discovery-progress.js';
+import { readDigestStream } from './digest-response.js';
 
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
@@ -7,6 +9,9 @@ const review = document.querySelector('#review');
 const candidates = document.querySelector('#candidates');
 const result = document.querySelector('#result');
 const links = document.querySelector('#digest-links');
+const progressPanel = document.querySelector('#discovery-progress');
+const progressDetail = document.querySelector('#discovery-progress-detail');
+const prepareButton = document.querySelector('#prepare');
 let articles = [];
 let automaticDigestUrls = [];
 let sources = loadSources(localStorage);
@@ -111,9 +116,18 @@ const renderDigest = (urls) => {
   result.hidden = false;
 };
 
+const renderDiscoveryProgress = (event) => {
+  progressPanel.hidden = false;
+  progressPanel.dataset.phase = event.phase;
+  progressDetail.textContent = discoveryProgressMessage(event);
+  status.textContent = progressDetail.textContent;
+};
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  status.textContent = 'Агент читает источники и отбирает кандидатов…';
+  form.setAttribute('aria-busy', 'true');
+  prepareButton.disabled = true;
+  renderDiscoveryProgress({ phase: 'prefetching', sourceCount: sourceUrlsForDigest(sources).length });
   review.hidden = true;
   result.hidden = true;
   try {
@@ -128,8 +142,7 @@ form.addEventListener('submit', async (event) => {
       from: document.querySelector('#from').value,
       to: document.querySelector('#to').value
     }) });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error);
+    const body = await readDigestStream(response, renderDiscoveryProgress);
     articles = body.articles;
     automaticDigestUrls = body.automaticDigestUrls;
     candidates.replaceChildren(...articles.map((article) => {
@@ -143,8 +156,13 @@ form.addEventListener('submit', async (event) => {
       return label;
     }));
     review.hidden = false;
-    status.textContent = `Готово: ${articles.length} кандидатов.`;
-  } catch (error) { status.textContent = `Ошибка: ${error.message}`; }
+  } catch (error) {
+    progressPanel.dataset.phase = 'error';
+    status.textContent = `Ошибка: ${error.message}`;
+  } finally {
+    form.removeAttribute('aria-busy');
+    prepareButton.disabled = false;
+  }
 });
 
 document.querySelector('#manual').addEventListener('click', () => renderDigest([...document.querySelectorAll('#candidates input:checked')].map((input) => input.value)));
