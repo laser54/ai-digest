@@ -7,6 +7,7 @@ import {
   CODEX_DISCOVERY_LUNA_MODEL,
   codexThreadOptions,
   codexOutputSchema,
+  normalizeCodexUsage,
   selectDiscoveryModel
 } from '../src/digest-agent.js';
 import { discoverDigest } from '../src/discovery.js';
@@ -35,6 +36,32 @@ test('passes the selected discovery model to Codex thread configuration', () => 
 
 test('declares every Codex candidate schema field as required', () => {
   assert.deepEqual(codexOutputSchema().properties.candidates.items.required, ['url', 'title', 'publishedAt', 'reason']);
+});
+
+test('reports only complete, documented Codex usage values and marks absent or malformed usage unavailable', () => {
+  assert.deepEqual(normalizeCodexUsage({
+    input_tokens: 12,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 5,
+    reasoning_output_tokens: 7
+  }), {
+    available: true,
+    inputTokens: 12,
+    cachedInputTokens: 3,
+    cacheWriteInputTokens: 2,
+    outputTokens: 5,
+    reasoningOutputTokens: 7
+  });
+  assert.deepEqual(normalizeCodexUsage(null), { available: false });
+  assert.deepEqual(normalizeCodexUsage({ input_tokens: 12 }), { available: false });
+  assert.deepEqual(normalizeCodexUsage({
+    input_tokens: 12,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: -5,
+    reasoning_output_tokens: 7
+  }), { available: false });
 });
 
 test('rejects non-public and credential-bearing source URLs before fetching', async () => {

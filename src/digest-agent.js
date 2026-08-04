@@ -39,10 +39,29 @@ export function codexOutputSchema() {
   };
 }
 
+const usageFields = {
+  input_tokens: 'inputTokens',
+  cached_input_tokens: 'cachedInputTokens',
+  cache_write_input_tokens: 'cacheWriteInputTokens',
+  output_tokens: 'outputTokens',
+  reasoning_output_tokens: 'reasoningOutputTokens'
+};
+
+export function normalizeCodexUsage(usage) {
+  if (!usage || typeof usage !== 'object') return { available: false };
+
+  const normalized = Object.fromEntries(Object.entries(usageFields).map(([sdkName, publicName]) => [publicName, usage[sdkName]]));
+  if (!Object.values(normalized).every((value) => Number.isSafeInteger(value) && value >= 0)) return { available: false };
+  return { available: true, ...normalized };
+}
+
 export async function rankArticlesWithCodex({ articles, sourceUrls, themes, from, to }) {
   const { Codex } = await import('@openai/codex-sdk');
   const thread = new Codex().startThread(codexThreadOptions());
   const prompt = `You are a careful personal news editor. Use your web tools to research recent news only from the user-approved source URLs and their exact hostnames. Sources: ${JSON.stringify(sourceUrls)}. Themes: ${themes.join(', ') || 'all topics'}. Date window: ${from || 'no lower bound'} through ${to || 'no upper bound'}. You may use the pre-fetched candidates below, but do not stop if they are empty. Return up to 12 real, directly verified article URLs from the approved hosts only, with their exact titles and publication dates when available. Never invent URLs, titles, or dates.\nPre-fetched articles: ${JSON.stringify(articles)}`;
   const result = await thread.run(prompt, { outputSchema: codexOutputSchema() });
-  return normalizeAgentResult(extractJson(result.finalResponse), articles, sourceUrls);
+  return {
+    ...normalizeAgentResult(extractJson(result.finalResponse), articles, sourceUrls),
+    tokenUsage: normalizeCodexUsage(result.usage)
+  };
 }

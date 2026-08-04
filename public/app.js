@@ -2,6 +2,7 @@ import { loadSources, saveSources, sourceUrlsForDigest } from './source-workspac
 import { loadThemes, saveThemes, themesForDigest } from './theme-workspace.js';
 import { discoveryProgressMessage } from './discovery-progress.js';
 import { readDigestStream } from './digest-response.js';
+import { tokenUsageMessage } from './token-usage.js';
 
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
@@ -12,6 +13,7 @@ const links = document.querySelector('#digest-links');
 const progressPanel = document.querySelector('#discovery-progress');
 const progressDetail = document.querySelector('#discovery-progress-detail');
 const prepareButton = document.querySelector('#prepare');
+const tokenUsage = document.querySelector('#token-usage');
 let articles = [];
 let automaticDigestUrls = [];
 let sources = loadSources(localStorage);
@@ -130,6 +132,7 @@ form.addEventListener('submit', async (event) => {
   renderDiscoveryProgress({ phase: 'prefetching', sourceCount: sourceUrlsForDigest(sources).length });
   review.hidden = true;
   result.hidden = true;
+  tokenUsage.hidden = true;
   try {
     const sourceUrls = sourceUrlsForDigest(sources);
     if (!sourceUrls.length) throw new Error('Включите хотя бы один источник для AI-отбора.');
@@ -145,6 +148,8 @@ form.addEventListener('submit', async (event) => {
     const body = await readDigestStream(response, renderDiscoveryProgress);
     articles = body.articles;
     automaticDigestUrls = body.automaticDigestUrls;
+    tokenUsage.textContent = tokenUsageMessage(body.tokenUsage);
+    tokenUsage.hidden = false;
     candidates.replaceChildren(...articles.map((article) => {
       const label = document.createElement('label');
       label.className = 'candidate';

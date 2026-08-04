@@ -26,6 +26,14 @@ test('reads progress and final result from an NDJSON response', async () => {
   assert.deepEqual(result.articles, []);
 });
 
+test('retains the server-reported token usage state without estimating it in the browser', async () => {
+  const result = await readDigestStream(streamResponse([
+    '{"type":"result","articles":[],"automaticDigestUrls":[],"progress":[],"tokenUsage":{"available":false}}\n'
+  ]), () => {});
+
+  assert.deepEqual(result.tokenUsage, { available: false });
+});
+
 test('releases the response reader when an NDJSON event is malformed', async () => {
   let released = false;
   const reader = {

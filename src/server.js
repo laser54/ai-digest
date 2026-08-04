@@ -40,7 +40,8 @@ app.post('/api/digest/prepare', createExecutionAuth(process.env.ADMIN_PASSWORD),
     res.end(encodeDigestStreamEvent('result', {
       articles: digest.candidates,
       automaticDigestUrls: digest.automaticDigestUrls,
-      progress
+      progress,
+      tokenUsage: digest.tokenUsage || { available: false }
     }));
   } catch (error) {
     if (res.headersSent) {
