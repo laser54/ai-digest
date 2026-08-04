@@ -2,7 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validatePublicHttpUrl } from '../src/url-policy.js';
 import { normalizeAgentResult, filterArticlesByDate } from '../src/digest-result.js';
-import { codexThreadOptions, codexOutputSchema } from '../src/digest-agent.js';
+import {
+  CODEX_DISCOVERY_FALLBACK_MODEL,
+  CODEX_DISCOVERY_LUNA_MODEL,
+  codexThreadOptions,
+  codexOutputSchema,
+  selectDiscoveryModel
+} from '../src/digest-agent.js';
 import { discoverDigest } from '../src/discovery.js';
 
 test('runs Codex from a container checkout without requiring a Git directory', () => {
@@ -12,6 +18,19 @@ test('runs Codex from a container checkout without requiring a Git directory', (
 test('enables Codex web tools for source discovery', () => {
   assert.equal(codexThreadOptions().networkAccessEnabled, true);
   assert.equal(codexThreadOptions().webSearchEnabled, true);
+});
+
+test('selects the verified Luna model by default and only permits the safe fallback override', () => {
+  assert.equal(CODEX_DISCOVERY_LUNA_MODEL, 'gpt-5.6-luna');
+  assert.equal(CODEX_DISCOVERY_FALLBACK_MODEL, 'gpt-5.6-terra');
+  assert.equal(selectDiscoveryModel({}), CODEX_DISCOVERY_LUNA_MODEL);
+  assert.equal(selectDiscoveryModel({ CODEX_DISCOVERY_MODEL: CODEX_DISCOVERY_FALLBACK_MODEL }), CODEX_DISCOVERY_FALLBACK_MODEL);
+  assert.equal(selectDiscoveryModel({ CODEX_DISCOVERY_MODEL: 'unverified-model' }), CODEX_DISCOVERY_LUNA_MODEL);
+});
+
+test('passes the selected discovery model to Codex thread configuration', () => {
+  assert.equal(codexThreadOptions().model, CODEX_DISCOVERY_LUNA_MODEL);
+  assert.equal(codexThreadOptions(CODEX_DISCOVERY_FALLBACK_MODEL).model, CODEX_DISCOVERY_FALLBACK_MODEL);
 });
 
 test('declares every Codex candidate schema field as required', () => {

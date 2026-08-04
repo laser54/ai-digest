@@ -1,13 +1,24 @@
 import { normalizeAgentResult } from './digest-result.js';
 
+export const CODEX_DISCOVERY_LUNA_MODEL = 'gpt-5.6-luna';
+export const CODEX_DISCOVERY_FALLBACK_MODEL = 'gpt-5.6-terra';
+
+export function selectDiscoveryModel(environment = process.env) {
+  const requestedModel = environment.CODEX_DISCOVERY_MODEL;
+  return requestedModel === CODEX_DISCOVERY_FALLBACK_MODEL
+    ? CODEX_DISCOVERY_FALLBACK_MODEL
+    : CODEX_DISCOVERY_LUNA_MODEL;
+}
+
 function extractJson(text) {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Codex did not return JSON');
   return JSON.parse(match[0]);
 }
 
-export function codexThreadOptions() {
+export function codexThreadOptions(model = selectDiscoveryModel()) {
   return {
+    model,
     workingDirectory: process.cwd(),
     skipGitRepoCheck: true,
     approvalPolicy: 'never',
