@@ -435,3 +435,86 @@ button[type="submit"]:hover,
   .discovery-progress::before { animation: none; }
   * { transition: none !important; }
 }
+
+/* Source report breakdown */
+.source-report-section {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-summary-badge {
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.source-report-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.source-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.source-host {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  background: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.badge.status-fetched,
+.badge.outcome-researched {
+  background: rgba(99, 214, 161, 0.15);
+  color: var(--accent);
+}
+
+.badge.status-no_articles,
+.badge.outcome-no_relevant_articles {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+.badge.status-http_error,
+.badge.status-timeout,
+.badge.status-blocked,
+.badge.status-too_large,
+.badge.status-non_html,
+.badge.status-redirect_error,
+.badge.outcome-unreachable_from_research,
+.badge.outcome-unsupported {
+  background: rgba(255, 100, 100, 0.15);
+  color: var(--danger);
+}
+
+.source-error {
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin-left: auto;
+}
