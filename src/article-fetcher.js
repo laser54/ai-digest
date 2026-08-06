@@ -12,6 +12,15 @@ export class FetchSourceError extends Error {
   }
 }
 
+function isTimeoutError(err) {
+  if (!err) return false;
+  const name = err.name || '';
+  if (name === 'TimeoutError' || name === 'AbortError') return true;
+  const code = err.code || '';
+  if (code === 'ERR_TIMEOUT' || code === 'ABORT_ERR') return true;
+  return false;
+}
+
 export async function fetchHtml(startUrl) {
   let current;
   try {
@@ -29,7 +38,7 @@ export async function fetchHtml(startUrl) {
         headers: { 'user-agent': 'AI-Digest/0.1 (+personal research)' }
       });
     } catch (err) {
-      if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || /timeout/i.test(err?.message || '')) {
+      if (isTimeoutError(err)) {
         throw new FetchSourceError('timeout', 'Request timed out');
       }
       throw new FetchSourceError('http_error', err?.message || 'Network fetch failed');
@@ -65,7 +74,7 @@ export async function fetchHtml(startUrl) {
     try {
       body = await response.arrayBuffer();
     } catch (err) {
-      if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || /timeout/i.test(err?.message || '')) {
+      if (isTimeoutError(err)) {
         throw new FetchSourceError('timeout', 'Request timed out');
       }
       throw new FetchSourceError('http_error', 'Failed to read response body');
@@ -171,9 +180,6 @@ export async function fetchArticles(sourceUrls, maxPerSource = 20) {
 
   const uniqueArticles = [...uniqueMap.values()].slice(0, sourceUrls.length * maxPerSource);
 
-  return Object.assign(uniqueArticles, {
-    articles: uniqueArticles,
-    sources
-  });
+  return { articles: uniqueArticles, sources };
 }
 

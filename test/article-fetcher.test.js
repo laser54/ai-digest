@@ -10,6 +10,73 @@ test('blocks non-public IP and invalid URLs with blocked status', async () => {
   assert.equal(result.articles.length, 0);
 });
 
+test('returns a pure object result with articles and sources (no array augmentation)', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(
+    '<html><head><title>OK</title></head><body><article><h1>One</h1><a href="/x">x</a></article></body></html>',
+    { headers: { 'content-type': 'text/html' } }
+  );
+
+  try {
+    const result = await fetchArticles(['https://example.com/']);
+    assert.equal(Array.isArray(result), false, 'result must be a plain object, not an array');
+    assert.equal(typeof result, 'object');
+    assert.ok(Array.isArray(result.articles));
+    assert.ok(Array.isArray(result.sources));
+    assert.deepEqual(Object.keys(result).sort(), ['articles', 'sources']);
+    assert.equal(result.articles.length, 2);
+    assert.equal(result.sources.length, 1);
+    const serialized = JSON.stringify(result);
+    assert.match(serialized, /"articles":/);
+    assert.match(serialized, /"sources":/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('does not classify errors with "timeout" only in the message as timeout', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    const err = new Error('upstream connect timeout (not actually a fetch timeout)');
+    throw err;
+  };
+
+  try {
+    const result = await fetchArticles(['https://example.com/x']);
+    assert.equal(result.sources[0].status, 'http_error');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('classifies AbortError and TimeoutError by name as timeout', async () => {
+  const originalFetch = globalThis.fetch;
+  let observed;
+  globalThis.fetch = async () => {
+    const err = new Error('aborted');
+    err.name = 'AbortError';
+    throw err;
+  };
+  try {
+    observed = (await fetchArticles(['https://example.com/a'])).sources[0].status;
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(observed, 'timeout');
+
+  globalThis.fetch = async () => {
+    const err = new Error('timed out');
+    err.name = 'TimeoutError';
+    throw err;
+  };
+  try {
+    observed = (await fetchArticles(['https://example.com/b'])).sources[0].status;
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(observed, 'timeout');
+});
+
 test('handles partial success when one source fails and another succeeds', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {

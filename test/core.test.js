@@ -143,4 +143,27 @@ test('discovery reports determinate source and candidate-link progress without e
     { phase: 'complete', sourceCount: 1, candidateCount: 1 }
   ]);
   assert.equal(digest.candidates[0].url, 'https://example.com/news/verified');
+  assert.deepEqual(digest.sources, []);
+});
+
+test('exposes typed per-source status in the final digest result without leaking it into progress events', async () => {
+  const events = [];
+  const input = { sourceUrls: ['https://example.com/a', 'https://example.com/b'], themes: [], from: '', to: '' };
+  const digest = await discoverDigest(input, {
+    prefetchArticles: async () => ({
+      articles: [],
+      sources: [
+        { url: 'https://example.com/a', status: 'fetched', articles: [{ title: 'A', url: 'https://example.com/a/x', publishedAt: null, sourceUrl: 'https://example.com/a', sourceHost: 'example.com' }], error: null },
+        { url: 'https://example.com/b', status: 'http_error', articles: [], error: 'HTTP 500' }
+      ]
+    }),
+    researchWithCodex: async () => ({ candidates: [], automaticDigestUrls: [] })
+  }, (event) => events.push(event));
+
+  for (const ev of events) {
+    assert.equal('sources' in ev, false, `progress event ${ev.phase} must not include sources`);
+  }
+  assert.equal(digest.sources.length, 2);
+  assert.equal(digest.sources[0].status, 'fetched');
+  assert.equal(digest.sources[1].status, 'http_error');
 });
