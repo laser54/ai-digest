@@ -125,7 +125,7 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
       const normalized = normalizeAgentResult(rawResult, sourceArticles, [sourceUrl]);
       const validCandidates = normalized.candidates;
       const validAutomatic = normalized.automaticDigestUrls;
-      const checkedCount = Number.isInteger(rawResult?.checkedCount) && rawResult.checkedCount >= 0 ? rawResult.checkedCount : validCandidates.length;
+      const checkedCount = Number.isInteger(rawResult?.checkedCount) && rawResult.checkedCount >= 0 ? rawResult.checkedCount : null;
 
       let outcome = rawResult?.outcome;
       if (!['researched', 'no_relevant_articles', 'unreachable_from_research', 'blocked', 'unsupported'].includes(outcome)) {
@@ -143,14 +143,15 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
         usage
       };
     } catch (err) {
+      console.error('[codex-coverage] source research failed', { sourceUrl, error: err?.message });
       return {
         sourceUrl,
         candidates: [],
         automaticDigestUrls: [],
-        checkedCount: 0,
+        checkedCount: null,
         foundCount: 0,
         outcome: 'unreachable_from_research',
-        error: err?.message || 'Failed to research source with Codex',
+        error: 'Source research failed; see server logs for details',
         usage: { available: false }
       };
     }
@@ -176,12 +177,13 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
       allAutomatic.push(...data.automaticDigestUrls);
       usages.push(data.usage);
     } else {
+      console.error('[codex-coverage] source research rejected', { sourceUrl, error: res.reason?.message });
       researchSources.push({
         url: sourceUrl,
         outcome: 'unreachable_from_research',
-        checkedCount: 0,
+        checkedCount: null,
         foundCount: 0,
-        error: res.reason?.message || 'Failed to research source'
+        error: 'Source research failed; see server logs for details'
       });
       usages.push({ available: false });
     }

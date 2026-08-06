@@ -124,9 +124,9 @@ test('rankArticlesWithCodex handles partial failure during research without drop
 
   const failed = result.researchSources.find(s => s.url === 'https://example.com/unreachable');
   assert.equal(failed.outcome, 'unreachable_from_research');
-  assert.equal(failed.checkedCount, 0);
+  assert.equal(failed.checkedCount, null);
   assert.equal(failed.foundCount, 0);
-  assert.match(failed.error, /Codex connection reset/);
+  assert.equal(failed.error, 'Source research failed; see server logs for details');
 
   assert.equal(result.candidates.length, 1);
   assert.equal(result.candidates[0].url, 'https://example.com/good/item-1');

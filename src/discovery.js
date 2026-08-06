@@ -26,9 +26,7 @@ export async function discoverDigest(input, { prefetchArticles, researchWithCode
 
   onProgress({ phase: 'researching', sourceCount, candidateLinkCount: articles.length, sourceHosts: sourceHosts(input.sourceUrls) });
   const digest = await researchWithCodex({ ...input, articles });
-  const completeEvent = { phase: 'complete', sourceCount, candidateCount: digest.candidates.length };
-  if (digest.researchSources) completeEvent.researchSources = digest.researchSources;
-  onProgress(completeEvent);
+  onProgress({ phase: 'complete', sourceCount, candidateCount: digest.candidates.length });
   return { ...digest, sources: sources || [], researchSources: digest.researchSources || [] };
 }
 
