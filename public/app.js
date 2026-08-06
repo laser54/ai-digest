@@ -116,14 +116,56 @@ const renderDigest = (urls) => {
     return item;
   }));
   result.hidden = false;
+  scrollTo(result);
 };
 
 const renderDiscoveryProgress = (event) => {
   progressPanel.hidden = false;
   progressPanel.dataset.phase = event.phase;
   progressDetail.textContent = discoveryProgressMessage(event);
-  status.textContent = progressDetail.textContent;
 };
+
+const selectedCount = document.querySelector('#selected-count');
+const selectAllButton = document.querySelector('#select-all');
+
+const updateSelectedCount = () => {
+  const boxes = [...candidates.querySelectorAll('input[type="checkbox"]')];
+  const checkedCount = boxes.filter((box) => box.checked).length;
+  selectedCount.textContent = boxes.length ? `Отмечено ${checkedCount} из ${boxes.length}` : '';
+  selectAllButton.textContent = boxes.length > 0 && checkedCount === boxes.length ? 'Снять все' : 'Выбрать все';
+};
+
+candidates.addEventListener('change', updateSelectedCount);
+
+selectAllButton.addEventListener('click', () => {
+  const boxes = [...candidates.querySelectorAll('input[type="checkbox"]')];
+  const target = boxes.some((box) => !box.checked);
+  boxes.forEach((box) => { box.checked = target; });
+  updateSelectedCount();
+});
+
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const scrollTo = (element) => element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+
+const copyDigest = async () => {
+  const lines = [...links.querySelectorAll('a')].map((anchor) => `- [${anchor.textContent}](${anchor.href})`);
+  if (!lines.length) return;
+  const text = lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+  status.dataset.kind = 'ok';
+  status.textContent = `Скопировано ссылок: ${lines.length}.`;
+};
+
+document.querySelector('#copy-digest').addEventListener('click', copyDigest);
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -133,6 +175,8 @@ form.addEventListener('submit', async (event) => {
   review.hidden = true;
   result.hidden = true;
   tokenUsage.hidden = true;
+  status.textContent = '';
+  delete status.dataset.kind;
   try {
     const sourceUrls = sourceUrlsForDigest(sources);
     if (!sourceUrls.length) throw new Error('Включите хотя бы один источник для AI-отбора.');
@@ -157,12 +201,21 @@ form.addEventListener('submit', async (event) => {
       checkbox.type = 'checkbox'; checkbox.value = article.url;
       const link = document.createElement('a');
       link.href = article.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = article.title;
-      label.append(checkbox, link, document.createTextNode(` — ${article.reason}`));
+      const meta = document.createElement('span');
+      meta.className = 'candidate-meta';
+      const reason = document.createElement('span');
+      reason.className = 'candidate-reason';
+      reason.textContent = article.reason;
+      meta.append(article.publishedAt ? `${article.publishedAt} · ` : '', reason);
+      label.append(checkbox, link, meta);
       return label;
     }));
+    updateSelectedCount();
     review.hidden = false;
+    scrollTo(review);
   } catch (error) {
     progressPanel.dataset.phase = 'error';
+    delete status.dataset.kind;
     status.textContent = `Ошибка: ${error.message}`;
   } finally {
     form.removeAttribute('aria-busy');
