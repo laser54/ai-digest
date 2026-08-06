@@ -93,9 +93,13 @@ function dateFrom($node) {
   return $node.find('time').first().attr('datetime') || $node.attr('datetime') || null;
 }
 
-export async function fetchArticles(sourceUrls, maxPerSource = 20) {
+export async function fetchArticles(sourceUrls, maxPerSource = 20, { logger } = {}) {
   const sourceResults = await Promise.allSettled(sourceUrls.map(async (sourceUrl) => {
+    const startTime = Date.now();
     try {
+      if (logger) {
+        logger.info('digest.prefetch.source.started', { sourceUrl });
+      }
       const { url, html } = await fetchHtml(sourceUrl);
       const $ = cheerio.load(html);
       const pageTitle = $('title').first().text().replace(/\s+/g, ' ').trim();
@@ -139,6 +143,15 @@ export async function fetchArticles(sourceUrls, maxPerSource = 20) {
       });
 
       const status = links.length > 0 ? 'fetched' : 'no_articles';
+      const durationMs = Date.now() - startTime;
+      if (logger) {
+        logger.info('digest.prefetch.source.completed', {
+          sourceUrl,
+          status,
+          candidateCount: links.length,
+          durationMs
+        });
+      }
       return {
         url: sourceUrl,
         status,
@@ -147,11 +160,21 @@ export async function fetchArticles(sourceUrls, maxPerSource = 20) {
       };
     } catch (err) {
       const status = err instanceof FetchSourceError ? err.status : 'http_error';
+      const durationMs = Date.now() - startTime;
+      if (logger) {
+        logger.warn('digest.prefetch.source.completed', {
+          sourceUrl,
+          status,
+          candidateCount: 0,
+          durationMs,
+          errorName: err?.name || 'FetchError'
+        });
+      }
       return {
         url: sourceUrl,
         status,
         articles: [],
-        error: err.message || 'Unknown error'
+        error: status
       };
     }
   }));

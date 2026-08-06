@@ -10,6 +10,8 @@ import { createExecutionAuth } from './auth.js';
 import { encodeDigestStreamEvent } from './digest-stream.js';
 import { readSettings, writeSettings } from './settings-storage.js';
 
+import { AuditLogger } from './logging.js';
+
 const requestSchema = z.object({
   sourceUrls: z.array(z.string().url()).min(1).max(10),
   themes: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
@@ -25,6 +27,12 @@ const settingsSchema = z.object({
   themes: z.array(z.string().trim().min(1).max(80)).max(50).default([])
 });
 
+const PUBLIC_ERROR_MESSAGE = 'Failed to prepare digest';
+
+function publicErrorPayload(requestId) {
+  return { error: PUBLIC_ERROR_MESSAGE, requestId };
+}
+
 const app = express();
 if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
   throw new Error('ADMIN_PASSWORD is required in production');
@@ -33,6 +41,7 @@ app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '../public')));
 
 app.post('/api/digest/prepare', (req, res, next) => createExecutionAuth(process.env.ADMIN_PASSWORD)(req, res, next), async (req, res) => {
+  const logger = new AuditLogger();
   try {
     const input = requestSchema.parse(req.body);
     await Promise.all(input.sourceUrls.map(validatePublicHttpUrl));
@@ -40,8 +49,9 @@ app.post('/api/digest/prepare', (req, res, next) => createExecutionAuth(process.
     res.type('application/x-ndjson');
     res.flushHeaders();
     const digest = await discoverDigest(input, {
-      prefetchArticles: fetchArticles,
-      researchWithCodex: rankArticlesWithCodex
+      prefetchArticles: (urls) => fetchArticles(urls, 20, { logger }),
+      researchWithCodex: (args) => rankArticlesWithCodex({ ...args, logger }),
+      logger
     }, (event) => {
       progress.push(event);
       res.write(encodeDigestStreamEvent('progress', event));
@@ -52,14 +62,20 @@ app.post('/api/digest/prepare', (req, res, next) => createExecutionAuth(process.
       progress,
       sources: digest.sources || [],
       researchSources: digest.researchSources || [],
-      tokenUsage: digest.tokenUsage || { available: false }
+      tokenUsage: digest.tokenUsage || { available: false },
+      requestId: logger.requestId
     }));
   } catch (error) {
+    logger.error('digest.request.failed', {
+      errorName: error?.name || 'UnknownError',
+      errorStatus: error?.status || 'unknown',
+      zodIssues: Array.isArray(error?.issues) ? error.issues.length : null
+    });
     if (res.headersSent) {
-      res.end(encodeDigestStreamEvent('error', { error: error instanceof Error ? error.message : 'Не удалось подготовить дайджест' }));
+      res.end(encodeDigestStreamEvent('error', publicErrorPayload(logger.requestId)));
       return;
     }
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Не удалось подготовить дайджест' });
+    res.status(400).json(publicErrorPayload(logger.requestId));
   }
 });
 
