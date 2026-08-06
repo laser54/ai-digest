@@ -160,14 +160,7 @@ export async function fetchArticles(sourceUrls, maxPerSource = 20) {
     if (res.status === 'fulfilled') {
       return res.value;
     }
-    const err = res.reason;
-    const status = err instanceof FetchSourceError ? err.status : 'http_error';
-    return {
-      url: sourceUrls[index],
-      status,
-      articles: [],
-      error: err?.message || 'Failed to fetch source'
-    };
+    throw new Error(`Prefetch worker for ${sourceUrls[index]} rejected unexpectedly: ${res.reason?.message || res.reason}`);
   });
 
   const allArticles = sources.flatMap((s) => s.articles);
