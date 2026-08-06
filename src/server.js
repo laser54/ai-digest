@@ -83,4 +83,8 @@ app.put('/api/settings', async (req, res) => {
 });
 
 export { app };
-app.listen(process.env.PORT || 3030, () => console.log('AI Digest running'));
+
+const isMain = Boolean(process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url));
+if (isMain) {
+  app.listen(process.env.PORT || 3030, () => console.log('AI Digest running'));
+}
