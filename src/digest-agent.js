@@ -97,8 +97,15 @@ export function aggregateCodexUsage(usages) {
   return aggregated;
 }
 
-export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], themes = [], from, to, _mockRun }) {
-  const runs = await Promise.allSettled(sourceUrls.map(async (sourceUrl) => {
+export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], themes = [], from, to, _mockRun, _timeoutMs }) {
+  const defaultTimeoutMs = 60_000;
+  const timeoutMs = Number.isInteger(_timeoutMs) && _timeoutMs > 0
+    ? _timeoutMs
+    : (Number.isInteger(Number(process.env.CODEX_RESEARCH_TIMEOUT_MS)) && Number(process.env.CODEX_RESEARCH_TIMEOUT_MS) > 0
+        ? Number(process.env.CODEX_RESEARCH_TIMEOUT_MS)
+        : defaultTimeoutMs);
+
+  const researchTask = (sourceUrl) => {
     let sourceHost;
     try {
       sourceHost = new URL(sourceUrl).hostname;
@@ -107,7 +114,7 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
     }
     const sourceArticles = articles.filter(a => a.sourceUrl === sourceUrl || (sourceHost && a.sourceHost === sourceHost));
 
-    try {
+    return (async () => {
       let rawResult;
       let usage = { available: false };
 
@@ -142,47 +149,89 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
         error: null,
         usage
       };
-    } catch (err) {
-      console.error('[codex-coverage] source research failed', { sourceUrl, error: err?.message });
-      return {
+    })();
+  };
+
+  // Race each per-source task against a shared timer. If the task is still
+  // running when the timer fires, we abandon it (the underlying codex
+  // child process continues to run; we just stop awaiting it) and return a
+  // typed outcome of `unreachable_from_research` with `errorName:
+  // CodexResearchTimeout` so the UI and audit log can report a real
+  // failure mode instead of a fake progress bar.
+  const withTimeout = (sourceUrl, taskPromise) => new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve({
         sourceUrl,
         candidates: [],
         automaticDigestUrls: [],
         checkedCount: null,
         foundCount: 0,
         outcome: 'unreachable_from_research',
-        error: 'Source research failed; see server logs for details',
+        errorName: 'CodexResearchTimeout',
+        error: 'Source research timed out',
         usage: { available: false }
-      };
-    }
-  }));
+      });
+    }, timeoutMs);
+    taskPromise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({
+          sourceUrl,
+          candidates: [],
+          automaticDigestUrls: [],
+          checkedCount: null,
+          foundCount: 0,
+          outcome: 'unreachable_from_research',
+          errorName: err?.name || 'CodexResearchFailed',
+          error: 'Source research failed; see server logs for details',
+          usage: { available: false }
+        });
+      }
+    );
+  });
+
+  const runs = await Promise.allSettled(sourceUrls.map((sourceUrl) => withTimeout(sourceUrl, researchTask(sourceUrl))));
 
   const researchSources = [];
   const allCandidates = [];
   const allAutomatic = [];
   const usages = [];
+  let timedOutSourceCount = 0;
 
   runs.forEach((res, index) => {
     const sourceUrl = sourceUrls[index];
     if (res.status === 'fulfilled') {
       const data = res.value;
+      if (data.errorName === 'CodexResearchTimeout') timedOutSourceCount += 1;
       researchSources.push({
         url: sourceUrl,
         outcome: data.outcome,
         checkedCount: data.checkedCount,
         foundCount: data.foundCount,
+        errorName: data.errorName || null,
         error: data.error
       });
       allCandidates.push(...data.candidates);
       allAutomatic.push(...data.automaticDigestUrls);
       usages.push(data.usage);
     } else {
-      console.error('[codex-coverage] source research rejected', { sourceUrl, error: res.reason?.message });
       researchSources.push({
         url: sourceUrl,
         outcome: 'unreachable_from_research',
         checkedCount: null,
         foundCount: 0,
+        errorName: res.reason?.name || 'CodexResearchRejected',
         error: 'Source research failed; see server logs for details'
       });
       usages.push({ available: false });
@@ -204,6 +253,8 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
     candidates: uniqueCandidates,
     automaticDigestUrls,
     researchSources,
+    timedOutSourceCount,
+    researchTimeoutMs: timeoutMs,
     tokenUsage: aggregateCodexUsage(usages)
   };
 }

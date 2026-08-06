@@ -69,8 +69,18 @@ export async function discoverDigest(input, { prefetchArticles, researchWithCode
     candidateCount: digest.candidates.length,
     automaticDigestCount: (digest.automaticDigestUrls || []).length,
     tokenUsageAvailable: Boolean(digest.tokenUsage?.available),
+    timedOutSourceCount: digest.timedOutSourceCount || 0,
+    researchTimeoutMs: digest.researchTimeoutMs || null,
     durationMs: codexDurationMs
   });
+
+  if ((digest.timedOutSourceCount || 0) > 0) {
+    auditLogger.warn('digest.codex.timeout', {
+      timedOutSourceCount: digest.timedOutSourceCount,
+      researchTimeoutMs: digest.researchTimeoutMs || null,
+      totalSourceCount: input.sourceUrls.length
+    });
+  }
 
   onProgress({ phase: 'complete', sourceCount, candidateCount: digest.candidates.length });
 
