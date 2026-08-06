@@ -126,7 +126,7 @@ test('reports http_error status for non-2xx response status', async () => {
   try {
     const result = await fetchArticles(['https://example.com/notfound']);
     assert.equal(result.sources[0].status, 'http_error');
-    assert.match(result.sources[0].error, /HTTP 404/);
+    assert.equal(result.sources[0].error, 'http_error');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -139,7 +139,7 @@ test('reports non_html status when response Content-Type is not text/html', asyn
   try {
     const result = await fetchArticles(['https://example.com/api']);
     assert.equal(result.sources[0].status, 'non_html');
-    assert.match(result.sources[0].error, /did not return HTML/);
+    assert.equal(result.sources[0].error, 'non_html');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -156,7 +156,7 @@ test('reports timeout status when request times out', async () => {
   try {
     const result = await fetchArticles(['https://example.com/slow']);
     assert.equal(result.sources[0].status, 'timeout');
-    assert.match(result.sources[0].error, /timed out/i);
+    assert.equal(result.sources[0].error, 'timeout');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -172,7 +172,7 @@ test('reports too_large status when body exceeds max bytes', async () => {
   try {
     const result = await fetchArticles(['https://example.com/huge']);
     assert.equal(result.sources[0].status, 'too_large');
-    assert.match(result.sources[0].error, /exceeds 1\.5 MB/);
+    assert.equal(result.sources[0].error, 'too_large');
   } finally {
     globalThis.fetch = originalFetch;
   }

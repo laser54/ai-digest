@@ -31,17 +31,20 @@ function looksLikeUrlWithCredentials(value) {
   }
 }
 
+function normalizeKey(key) {
+  return key.toLowerCase().replace(/[-_]/g, '');
+}
+
 const SENSITIVE_KEYS = new Set([
   'password',
-  'admin_password',
-  'x-ai-digest-password',
-  'x-execution-auth',
+  'adminpassword',
+  'xaidigestpassword',
+  'xexecutionauth',
   'authorization',
   'cookie',
   'token',
   'secret',
   'secretkey',
-  'api_key',
   'apikey',
   'html',
   'prompt',
@@ -54,7 +57,7 @@ const SENSITIVE_KEYS = new Set([
   'context',
   'payload',
   'message'
-]);
+].map(normalizeKey));
 
 export function sanitizeLogValue(value) {
   if (value === null || value === undefined) return value;
@@ -78,10 +81,10 @@ export function sanitizeLogObject(obj) {
 
   const cleaned = {};
   for (const [key, val] of Object.entries(obj)) {
-    const lowerKey = key.toLowerCase();
-    if (SENSITIVE_KEYS.has(lowerKey)) {
+    const normalizedKey = normalizeKey(key);
+    if (SENSITIVE_KEYS.has(normalizedKey)) {
       cleaned[key] = '[REDACTED]';
-    } else if (lowerKey === 'sourceurl' && typeof val === 'string') {
+    } else if (normalizedKey === 'sourceurl' && typeof val === 'string') {
       cleaned[key] = sanitizeUrl(val);
     } else if (typeof val === 'object' && val !== null) {
       cleaned[key] = sanitizeLogObject(val);
