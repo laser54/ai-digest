@@ -1,9 +1,6 @@
 services:
   app:
-    image: ai-digest:local
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    image: ghcr.io/laser54/ai-digest:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
       - /etc/ai-digest/ai-digest.env

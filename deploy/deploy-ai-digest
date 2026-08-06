@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Installed as /usr/local/sbin/deploy-ai-digest and invoked only by a forced SSH key.
+set -euo pipefail
+
+readonly COMPOSE=/opt/ai-digest/app/deploy/docker-compose.production.yml
+readonly SERVICE=app
+readonly ALLOWED_PREFIX='deploy '
+
+command=${SSH_ORIGINAL_COMMAND:-}
+if [[ $command != ${ALLOWED_PREFIX}* ]]; then
+  echo 'Only deploy <git-sha> is allowed.' >&2
+  exit 64
+fi
+
+sha=${command#"$ALLOWED_PREFIX"}
+if [[ ! $sha =~ ^[0-9a-f]{40}$ ]]; then
+  echo 'Deployment revision must be a full lowercase SHA-1.' >&2
+  exit 64
+fi
+
+registry_token=$(cat)
+if [[ -z $registry_token ]]; then
+  echo 'Missing registry token.' >&2
+  exit 65
+fi
+
+cleanup() {
+  docker logout ghcr.io >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+printf '%s' "$registry_token" | docker login ghcr.io -u laser54 --password-stdin >/dev/null
+git -C /opt/ai-digest/app pull --ff-only origin main
+if [[ $(git -C /opt/ai-digest/app rev-parse HEAD) != "$sha" ]]; then
+  echo 'Checked-out deployment source does not match requested SHA.' >&2
+  exit 1
+fi
+IMAGE_TAG="$sha" docker compose -f "$COMPOSE" pull "$SERVICE"
+IMAGE_TAG="$sha" docker compose -f "$COMPOSE" up -d --no-build --force-recreate "$SERVICE"
+
+container=$(IMAGE_TAG="$sha" docker compose -f "$COMPOSE" ps -q "$SERVICE")
+for _ in $(seq 1 18); do
+  health=$(docker inspect --format '{{.State.Health.Status}}' "$container")
+  if [[ $health == healthy ]]; then
+    echo "deployed_sha=$sha"
+    echo "container=$container health=healthy"
+    exit 0
+  fi
+  if [[ $health == unhealthy ]]; then
+    docker logs --tail 80 "$container" >&2
+    exit 1
+  fi
+  sleep 5
+done
+
+echo 'Timed out waiting for the container health check.' >&2
+exit 1
