@@ -3,6 +3,7 @@ import { loadThemes, saveThemes, themesForDigest } from './theme-workspace.js';
 import { discoveryProgressMessage } from './discovery-progress.js';
 import { readDigestStream } from './digest-response.js';
 import { tokenUsageMessage } from './token-usage.js';
+import { renderSourceReport } from './source-report.js';
 
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
@@ -14,6 +15,7 @@ const progressPanel = document.querySelector('#discovery-progress');
 const progressDetail = document.querySelector('#discovery-progress-detail');
 const prepareButton = document.querySelector('#prepare');
 const tokenUsage = document.querySelector('#token-usage');
+const sourceReportContainer = document.querySelector('#source-report');
 let articles = [];
 let automaticDigestUrls = [];
 let sources = loadSources(localStorage);
@@ -209,6 +211,7 @@ form.addEventListener('submit', async (event) => {
   review.hidden = true;
   result.hidden = true;
   tokenUsage.hidden = true;
+  if (sourceReportContainer) sourceReportContainer.hidden = true;
   status.textContent = '';
   delete status.dataset.kind;
   try {
@@ -228,6 +231,10 @@ form.addEventListener('submit', async (event) => {
     automaticDigestUrls = body.automaticDigestUrls;
     tokenUsage.textContent = tokenUsageMessage(body.tokenUsage);
     tokenUsage.hidden = false;
+    if (sourceReportContainer) {
+      renderSourceReport(sourceReportContainer, body.sources, body.researchSources);
+      sourceReportContainer.hidden = false;
+    }
     candidates.replaceChildren(...articles.map((article) => {
       const label = document.createElement('label');
       label.className = 'candidate';
