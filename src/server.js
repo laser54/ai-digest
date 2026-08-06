@@ -8,12 +8,21 @@ import { rankArticlesWithCodex } from './digest-agent.js';
 import { discoverDigest } from './discovery.js';
 import { createExecutionAuth } from './auth.js';
 import { encodeDigestStreamEvent } from './digest-stream.js';
+import { readSettings, writeSettings } from './settings-storage.js';
 
 const requestSchema = z.object({
   sourceUrls: z.array(z.string().url()).min(1).max(10),
   themes: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
   from: z.string().date().optional().or(z.literal('')),
   to: z.string().date().optional().or(z.literal(''))
+});
+
+const settingsSchema = z.object({
+  sources: z.array(z.object({
+    url: z.string().url(),
+    enabled: z.boolean().default(true)
+  })).max(50).default([]),
+  themes: z.array(z.string().trim().min(1).max(80)).max(50).default([])
 });
 
 const app = express();
@@ -23,7 +32,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
 app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '../public')));
 
-app.post('/api/digest/prepare', createExecutionAuth(process.env.ADMIN_PASSWORD), async (req, res) => {
+app.post('/api/digest/prepare', (req, res, next) => createExecutionAuth(process.env.ADMIN_PASSWORD)(req, res, next), async (req, res) => {
   try {
     const input = requestSchema.parse(req.body);
     await Promise.all(input.sourceUrls.map(validatePublicHttpUrl));
@@ -53,4 +62,25 @@ app.post('/api/digest/prepare', createExecutionAuth(process.env.ADMIN_PASSWORD),
 });
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+app.get('/api/settings', async (_req, res) => {
+  try {
+    const settings = await readSettings();
+    res.json(settings);
+  } catch (error) {
+    res.status(500).json({ error: 'Не удалось прочитать настройки' });
+  }
+});
+
+app.put('/api/settings', async (req, res) => {
+  try {
+    const input = settingsSchema.parse(req.body);
+    const saved = await writeSettings(input);
+    res.json(saved);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Не удалось сохранить настройки' });
+  }
+});
+
+export { app };
 app.listen(process.env.PORT || 3030, () => console.log('AI Digest running'));

@@ -36,3 +36,5 @@ export function saveThemes(storage, themes) {
 export function themesForDigest(themes) {
   return normalizeThemes(themes);
 }
+
+export { fetchSettings, saveSettingsToServer } from './source-workspace.js';

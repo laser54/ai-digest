@@ -34,3 +34,19 @@ export function saveSources(storage, sources) {
 export function sourceUrlsForDigest(sources) {
   return normalizeSources(sources).filter((source) => source.enabled).map((source) => source.url);
 }
+
+export async function fetchSettings() {
+  const response = await fetch('/api/settings');
+  if (!response.ok) throw new Error('Не удалось загрузить настройки с сервера');
+  return response.json();
+}
+
+export async function saveSettingsToServer(settings) {
+  const response = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(settings)
+  });
+  if (!response.ok) throw new Error('Не удалось сохранить настройки на сервере');
+  return response.json();
+}

@@ -1,4 +1,4 @@
-import { loadSources, saveSources, sourceUrlsForDigest } from './source-workspace.js';
+import { loadSources, saveSources, sourceUrlsForDigest, fetchSettings, saveSettingsToServer } from './source-workspace.js';
 import { loadThemes, saveThemes, themesForDigest } from './theme-workspace.js';
 import { discoveryProgressMessage } from './discovery-progress.js';
 import { readDigestStream } from './digest-response.js';
@@ -25,9 +25,18 @@ const themeList = document.querySelector('#theme-list');
 const themeEmpty = document.querySelector('#theme-empty');
 const themeInput = document.querySelector('#theme-input');
 
+const syncToServer = async () => {
+  try {
+    await saveSettingsToServer({ sources, themes });
+  } catch (error) {
+    console.error('Failed to sync settings to server:', error);
+  }
+};
+
 const persistSources = (nextSources) => {
   sources = saveSources(localStorage, nextSources);
   renderSources();
+  syncToServer();
 };
 
 const renderSources = () => {
@@ -56,6 +65,7 @@ const renderSources = () => {
 const persistThemes = (nextThemes) => {
   themes = saveThemes(localStorage, nextThemes);
   renderThemes();
+  syncToServer();
 };
 
 const renderThemes = () => {
@@ -85,8 +95,32 @@ document.querySelector('#source-form').addEventListener('submit', (event) => {
   input.value = '';
 });
 
-renderSources();
-renderThemes();
+const initSettings = async () => {
+  const localSources = loadSources(localStorage);
+  const localThemes = loadThemes(localStorage);
+  try {
+    const serverSettings = await fetchSettings();
+    if (
+      serverSettings.sources.length === 0 &&
+      serverSettings.themes.length === 0 &&
+      (localSources.length > 0 || localThemes.length > 0)
+    ) {
+      sources = localSources;
+      themes = localThemes;
+      await saveSettingsToServer({ sources, themes });
+    } else {
+      sources = saveSources(localStorage, serverSettings.sources);
+      themes = saveThemes(localStorage, serverSettings.themes);
+    }
+  } catch (error) {
+    console.warn('Could not fetch server settings, using local fallback:', error);
+  } finally {
+    renderSources();
+    renderThemes();
+  }
+};
+
+initSettings();
 
 const addTheme = () => {
   const nextThemes = themesForDigest([...themes, themeInput.value]);
