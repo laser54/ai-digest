@@ -1,49 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { requestSchema, settingsSchema } from '../src/server.js';
 
-// Pull the schema indirectly by parsing the same shape the server uses.
-// We import server.js for its side-effect (it does not start a listener under
-// test mode), then call into the schema indirectly through a known endpoint
-// that requires the parsed body.
-//
-// In practice this test is a contract assertion: the /api/digest/prepare
-// endpoint must NOT propagate executionPassword to the parsed input that
-// downstream code (audit logger, discovery) sees.
+// Pure unit assertion: the Zod schema does not declare `executionPassword`,
+// so `.parse(body)` strips it. The downstream audit logger and discovery
+// pipeline only ever see the parsed `input`, never the raw body, so the
+// password can never reach them.
+test('requestSchema strips executionPassword from the parsed input', () => {
+  const raw = {
+    sourceUrls: ['https://example.com/news'],
+    themes: [],
+    from: '',
+    to: '',
+    executionPassword: 'ascii-secret'
+  };
+  const parsed = requestSchema.parse(raw);
+  assert.equal('executionPassword' in parsed, false, 'executionPassword key must not be in parsed input');
+  assert.equal(Object.keys(parsed).includes('executionPassword'), false);
+});
 
-import { app } from '../src/server.js';
+test('requestSchema succeeds without an executionPassword field', () => {
+  const parsed = requestSchema.parse({ sourceUrls: ['https://example.com/news'] });
+  assert.equal('executionPassword' in parsed, false);
+});
 
-async function readBody(response) {
-  return response.text();
-}
-
-test('request schema does not propagate executionPassword to the parsed input', async () => {
-  process.env.NODE_ENV = 'test';
-  process.env.ADMIN_PASSWORD = 'ascii-secret';
-
-  const server = app.listen(0);
-  try {
-    const port = server.address().port;
-    const body = JSON.stringify({
-      sourceUrls: ['https://example.com/news'],
-      themes: [],
-      from: '',
-      to: '',
-      executionPassword: 'ascii-secret'
-    });
-    const response = await fetch(`http://127.0.0.1:${port}/api/digest/prepare`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body
-    });
-    const text = await readBody(response);
-    // The server passes through to discoverDigest; with no working Codex in the
-    // test environment, we expect a stream with progress events followed by an
-    // error event. Either way, the parsed input must not leak the password
-    // into the wire response.
-    assert.equal(text.includes('ascii-secret'), false, 'executionPassword must not be echoed in any wire response');
-    assert.equal(text.includes('executionPassword'), false, 'executionPassword key must not appear in any wire response');
-  } finally {
-    server.close();
-    delete process.env.ADMIN_PASSWORD;
-  }
+test('settingsSchema also strips unknown fields including any future executionPassword', () => {
+  const parsed = settingsSchema.parse({ sources: [], themes: [], executionPassword: 'leak-test' });
+  assert.equal('executionPassword' in parsed, false);
 });

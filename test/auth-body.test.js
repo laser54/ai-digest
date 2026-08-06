@@ -2,10 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createExecutionAuth } from '../src/auth.js';
 
-const originalEnv = process.env;
-const originalNodeEnv = process.env.NODE_ENV;
-const originalAdminPassword = process.env.ADMIN_PASSWORD;
-
 function withAdminPassword(value, fn) {
   if (value === undefined) {
     delete process.env.ADMIN_PASSWORD;
