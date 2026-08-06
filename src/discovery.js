@@ -8,16 +8,27 @@ export async function discoverDigest(input, { prefetchArticles, researchWithCode
   const sourceCount = input.sourceUrls.length;
   onProgress({ phase: 'prefetching', sourceCount });
   let fetchedArticles = [];
+  let sources = null;
   try {
-    fetchedArticles = await prefetchArticles(input.sourceUrls);
+    const res = await prefetchArticles(input.sourceUrls);
+    if (res && typeof res === 'object' && 'sources' in res) {
+      sources = res.sources;
+      fetchedArticles = res.articles || res;
+    } else if (Array.isArray(res)) {
+      fetchedArticles = res;
+    }
   } catch {
     // Prefetch is a server-side candidate signal. Codex web research remains authoritative.
   }
 
   const articles = filterArticlesByDate(fetchedArticles, input.from, input.to);
-  onProgress({ phase: 'prefetched', sourceCount, candidateLinkCount: articles.length });
+  const prefetchedEvent = { phase: 'prefetched', sourceCount, candidateLinkCount: articles.length };
+  if (sources) prefetchedEvent.sources = sources;
+  onProgress(prefetchedEvent);
+
   onProgress({ phase: 'researching', sourceCount, candidateLinkCount: articles.length, sourceHosts: sourceHosts(input.sourceUrls) });
   const digest = await researchWithCodex({ ...input, articles });
   onProgress({ phase: 'complete', sourceCount, candidateCount: digest.candidates.length });
-  return digest;
+  return { ...digest, sources: sources || [] };
 }
+
