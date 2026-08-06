@@ -12,14 +12,14 @@ import { readSettings, writeSettings } from './settings-storage.js';
 
 import { AuditLogger } from './logging.js';
 
-const requestSchema = z.object({
+export const requestSchema = z.object({
   sourceUrls: z.array(z.string().url()).min(1).max(10),
   themes: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
   from: z.string().date().optional().or(z.literal('')),
   to: z.string().date().optional().or(z.literal(''))
 });
 
-const settingsSchema = z.object({
+export const settingsSchema = z.object({
   sources: z.array(z.object({
     url: z.string().url(),
     enabled: z.boolean().default(true)

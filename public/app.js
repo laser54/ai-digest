@@ -218,13 +218,13 @@ form.addEventListener('submit', async (event) => {
     const sourceUrls = sourceUrlsForDigest(sources);
     if (!sourceUrls.length) throw new Error('Включите хотя бы один источник для AI-отбора.');
     const response = await fetch('/api/digest/prepare', { method: 'POST', headers: {
-      'content-type': 'application/json',
-      'x-ai-digest-password': document.querySelector('#execution-password').value
+      'content-type': 'application/json'
     }, body: JSON.stringify({
       sourceUrls,
       themes: themesForDigest(themes),
       from: document.querySelector('#from').value,
-      to: document.querySelector('#to').value
+      to: document.querySelector('#to').value,
+      executionPassword: document.querySelector('#execution-password').value
     }) });
     const body = await readDigestStream(response, renderDiscoveryProgress);
     articles = body.articles;
