@@ -62,8 +62,7 @@ test('buildSourceReportData merges prefetch and research outcomes per source URL
 
 // Minimal DOM shim for the renderSourceReport test. We do not need a full DOM;
 // renderSourceReport only uses document.createElement and replaceChildren / append,
-// and writes only via textContent / className / tagName. Capture the result with a
-// tiny custom Container below.
+// and writes only via textContent / className / tagName.
 function makeShimDocument() {
   function makeNode(tagName) {
     return {
@@ -75,9 +74,7 @@ function makeShimDocument() {
       replaceChildren() { this._children = []; }
     };
   }
-  return {
-    createElement: (tag) => makeNode(tag)
-  };
+  return { createElement: (tag) => makeNode(tag) };
 }
 
 test('renderSourceReport never leaks URL credentials into the DOM', () => {
