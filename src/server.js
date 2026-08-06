@@ -51,6 +51,7 @@ app.post('/api/digest/prepare', (req, res, next) => createExecutionAuth(process.
       automaticDigestUrls: digest.automaticDigestUrls,
       progress,
       sources: digest.sources || [],
+      researchSources: digest.researchSources || [],
       tokenUsage: digest.tokenUsage || { available: false }
     }));
   } catch (error) {
