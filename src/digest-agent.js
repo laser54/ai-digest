@@ -99,11 +99,10 @@ export function aggregateCodexUsage(usages) {
 
 export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], themes = [], from, to, _mockRun, _timeoutMs }) {
   const defaultTimeoutMs = 60_000;
+  const envMs = Number(process.env.CODEX_RESEARCH_TIMEOUT_MS);
   const timeoutMs = Number.isInteger(_timeoutMs) && _timeoutMs > 0
     ? _timeoutMs
-    : (Number.isInteger(Number(process.env.CODEX_RESEARCH_TIMEOUT_MS)) && Number(process.env.CODEX_RESEARCH_TIMEOUT_MS) > 0
-        ? Number(process.env.CODEX_RESEARCH_TIMEOUT_MS)
-        : defaultTimeoutMs);
+    : (Number.isInteger(envMs) && envMs > 0 ? envMs : defaultTimeoutMs);
 
   const researchTask = (sourceUrl) => {
     let sourceHost;
@@ -175,6 +174,10 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
         usage: { available: false }
       });
     }, timeoutMs);
+    // The fulfillment / rejection handlers below also consume late rejections
+    // from the abandoned task so they cannot bubble as UnhandledPromiseRejection.
+    // By design we do not surface the late failure — the timeout has already
+    // produced our typed outcome and we have stopped awaiting the SDK call.
     taskPromise.then(
       (value) => {
         if (settled) return;
