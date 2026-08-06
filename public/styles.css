@@ -507,6 +507,7 @@ button[type="submit"]:hover,
 .badge.status-too_large,
 .badge.status-non_html,
 .badge.status-redirect_error,
+.badge.outcome-blocked,
 .badge.outcome-unreachable_from_research,
 .badge.outcome-unsupported {
   background: rgba(255, 100, 100, 0.15);

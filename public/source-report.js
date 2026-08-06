@@ -1,4 +1,4 @@
-export function formatSourceStatus(status) {
+export function formatSourceStatus(status, kind = 'prefetch') {
   switch (status) {
     case 'fetched':
       return 'Успешно загружен';
@@ -13,7 +13,7 @@ export function formatSourceStatus(status) {
     case 'redirect_error':
       return 'Ошибка редиректа';
     case 'blocked':
-      return 'Заблокирован (SSRF)';
+      return kind === 'research' ? 'Заблокирован (AI)' : 'Заблокирован (SSRF)';
     case 'too_large':
       return 'Превышен размер (>1.5 МБ)';
     case 'researched':
@@ -142,7 +142,7 @@ export function renderSourceReport(container, sources = [], researchSources = []
     if (item.researchOutcome) {
       const researchBadge = document.createElement('span');
       researchBadge.className = `badge outcome-${item.researchOutcome}`;
-      researchBadge.textContent = `AI: ${formatSourceStatus(item.researchOutcome)}`;
+      researchBadge.textContent = `AI: ${formatSourceStatus(item.researchOutcome, 'research')}`;
       li.append(researchBadge);
     }
 
