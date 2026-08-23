@@ -25,7 +25,33 @@ test('formatSourceStatus translates raw statuses into clear readable labels', ()
   assert.equal(formatSourceStatus('unknown'), 'Неизвестный статус');
 });
 
-test('sourceReportSummary calculates accurate metrics for partial success and empty results', () => {
+test('sourceReportSummary separates AI outcomes, candidates, and optional prefetch limitations', () => {
+  const sources = Array.from({ length: 7 }, (_, index) => ({
+    url: `https://source-${index}.example/news`,
+    status: index < 2 ? 'fetched' : 'http_error',
+    articles: [],
+    error: index < 2 ? null : 'http_error'
+  }));
+  const researchSources = sources.map((source, index) => ({
+    url: source.url,
+    outcome: index === 6 ? 'no_relevant_articles' : 'researched',
+    foundCount: [5, 5, 4, 4, 4, 4, 0][index]
+  }));
+
+  const summary = sourceReportSummary(sources, researchSources);
+  assert.deepEqual(summary, {
+    totalCount: 7,
+    aiAvailableCount: 7,
+    aiUnavailableCount: 0,
+    candidateCount: 26,
+    prefetchAvailableCount: 2,
+    prefetchLimitedCount: 5,
+    message: 'Источники: 7 · AI успешно: 7, AI недоступен: 0 · найдено кандидатов: 26 · предзагрузка доступна: 2, ограничена: 5. При ограничениях предзагрузки AI-исследование продолжилось.'
+  });
+  assert.doesNotMatch(summary.message, /с ошибкой: 5/);
+});
+
+test('sourceReportSummary reports partial AI failure honestly', () => {
   const sources = [
     { url: 'https://example.com/a', status: 'fetched', articles: [{ title: 'A' }] },
     { url: 'https://example.com/b', status: 'http_error', articles: [], error: 'HTTP 500' }
@@ -37,12 +63,24 @@ test('sourceReportSummary calculates accurate metrics for partial success and em
 
   const summary = sourceReportSummary(sources, researchSources);
   assert.equal(summary.totalCount, 2);
-  assert.equal(summary.fetchedCount, 1);
-  assert.equal(summary.failedCount, 1);
-  assert.equal(summary.researchedCount, 1);
-  assert.match(summary.message, /Обработано источников: 2/);
-  assert.match(summary.message, /успешно: 1/);
-  assert.match(summary.message, /с ошибкой: 1/);
+  assert.equal(summary.aiAvailableCount, 1);
+  assert.equal(summary.aiUnavailableCount, 1);
+  assert.equal(summary.candidateCount, 1);
+  assert.equal(summary.prefetchAvailableCount, 1);
+  assert.equal(summary.prefetchLimitedCount, 1);
+  assert.match(summary.message, /AI успешно: 1, AI недоступен: 1/);
+});
+
+test('sourceReportSummary reports all AI sources unavailable', () => {
+  const researchSources = [
+    { url: 'https://a.example', outcome: 'blocked', foundCount: 0 },
+    { url: 'https://b.example', outcome: 'unsupported', foundCount: 0 }
+  ];
+  const summary = sourceReportSummary([], researchSources);
+  assert.equal(summary.totalCount, 2);
+  assert.equal(summary.aiAvailableCount, 0);
+  assert.equal(summary.aiUnavailableCount, 2);
+  assert.match(summary.message, /AI успешно: 0, AI недоступен: 2/);
 });
 
 test('buildSourceReportData merges prefetch and research outcomes per source URL', async () => {
@@ -71,12 +109,18 @@ function makeShimDocument() {
       textContent: '',
       className: '',
       _children: [],
-      append(child) { this._children.push(child); },
+      append(...children) { this._children.push(...children); },
       replaceChildren() { this._children = []; }
     };
   }
   return { createElement: (tag) => makeNode(tag) };
 }
+
+const collectText = (node) => {
+  let out = String(node.textContent || '');
+  for (const child of node._children || []) out += ' ' + collectText(child);
+  return out;
+};
 
 test('renderSourceReport never leaks URL credentials into the DOM', () => {
   const originalDocument = globalThis.document;
@@ -92,16 +136,33 @@ test('renderSourceReport never leaks URL credentials into the DOM', () => {
     const container = document.createElement('section');
     renderSourceReport(container, sources, researchSources);
 
-    const collectText = (node) => {
-      let out = String(node.textContent || '');
-      for (const child of node._children || []) out += ' ' + collectText(child);
-      return out;
-    };
     const allText = container._children.map(collectText).join(' ');
 
     assert.equal(allText.includes('user:hidden'), false, 'URL credentials must not appear in rendered DOM');
     assert.equal(allText.includes('token=abc'), false, 'query string must not appear in rendered DOM');
     assert.equal(allText.includes('example.com'), true, 'hostname is allowed');
+  } finally {
+    globalThis.document = originalDocument;
+  }
+});
+
+test('renderSourceReport humanizes statuses and suppresses only redundant raw errors', () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = makeShimDocument();
+  try {
+    const sources = [
+      { url: 'https://a.example', status: 'http_error', articles: [], error: 'http_error' },
+      { url: 'https://b.example', status: 'too_large', articles: [], error: 'Upstream returned a distinct explanation' }
+    ];
+    const researchSources = sources.map(({ url }) => ({ url, outcome: 'researched', foundCount: 1 }));
+    const container = document.createElement('section');
+    renderSourceReport(container, sources, researchSources);
+    const allText = collectText(container);
+
+    assert.match(allText, /Предзагрузка: Ошибка HTTP/);
+    assert.doesNotMatch(allText, /http_error/);
+    assert.match(allText, /Upstream returned a distinct explanation/);
+    assert.equal(container._children[1]._children[0].className.includes('ai-success'), true);
   } finally {
     globalThis.document = originalDocument;
   }

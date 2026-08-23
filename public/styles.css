@@ -375,7 +375,7 @@ button[type="submit"]:hover,
   width: 16px;
   height: 16px;
   margin-top: 3px;
-  grid-row: span 2;
+  grid-row: span 3;
 }
 
 .candidate a {
@@ -391,6 +391,16 @@ button[type="submit"]:hover,
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
+.article-source {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.article-source-candidate { grid-column: 2; }
+.article-source-digest { margin-top: 4px; }
 
 .candidate-reason {
   display: block;
@@ -429,6 +439,7 @@ button[type="submit"]:hover,
   main { padding: 20px 14px 48px; }
   .dates { flex-direction: column; gap: 0; }
   .source-add, .theme-add { flex-direction: column; }
+  .article-source { font-size: 0.85rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -506,16 +517,24 @@ button[type="submit"]:hover,
 .badge.status-blocked,
 .badge.status-too_large,
 .badge.status-non_html,
-.badge.status-redirect_error,
+.badge.status-redirect_error {
+  background: rgba(255, 190, 80, 0.14);
+  color: var(--text-muted);
+}
+
 .badge.outcome-blocked,
 .badge.outcome-unreachable_from_research,
-.badge.outcome-unsupported {
+.badge.outcome-unsupported,
+.badge.outcome-reauthentication_required,
+.ai-failure .badge.outcome-unknown {
   background: rgba(255, 100, 100, 0.15);
   color: var(--danger);
 }
 
 .source-error {
-  color: var(--danger);
   font-size: 0.8rem;
   margin-left: auto;
 }
+
+.prefetch-error { color: var(--text-muted); }
+.research-error { color: var(--danger); }
