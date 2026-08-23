@@ -1,8 +1,12 @@
 const text = (value) => typeof value === 'string' ? value.trim() : '';
 
-const hostsFor = (urls) => new Set(urls.map((url) => {
-  try { return new URL(url).hostname; } catch { return ''; }
-}).filter(Boolean));
+export const canonicalHostsFor = (hostname) => new Set(hostname.startsWith('www.')
+  ? [hostname, hostname.slice(4)]
+  : [hostname, `www.${hostname}`]);
+
+const hostsFor = (urls) => new Set(urls.flatMap((url) => {
+  try { return [...canonicalHostsFor(new URL(url).hostname)]; } catch { return []; }
+}));
 
 export function filterArticlesByDate(articles, from, to) {
   return articles.filter((article) => {

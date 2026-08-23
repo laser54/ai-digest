@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validatePublicHttpUrl } from '../src/url-policy.js';
-import { normalizeAgentResult, filterArticlesByDate } from '../src/digest-result.js';
+import { canonicalHostsFor, normalizeAgentResult, filterArticlesByDate } from '../src/digest-result.js';
 import {
   CODEX_DISCOVERY_FALLBACK_MODEL,
   CODEX_DISCOVERY_LUNA_MODEL,
+  codexResearchPrompt,
   codexThreadOptions,
   codexOutputSchema,
   normalizeCodexUsage,
@@ -36,6 +37,24 @@ test('passes the selected discovery model to Codex thread configuration', () => 
 
 test('declares every Codex candidate schema field as required', () => {
   assert.deepEqual(codexOutputSchema().properties.candidates.items.required, ['url', 'title', 'publishedAt', 'reason']);
+});
+
+test('Codex prompt names both canonical site queries and recovery constraints', () => {
+  const prompt = codexResearchPrompt({
+    sourceUrl: 'https://www.rosneft.ru/press/news',
+    sourceArticles: [],
+    themes: ['энергетика'],
+    from: '2026-08-01',
+    to: '2026-08-23',
+    recovery: true
+  });
+
+  assert.match(prompt, /site:www\.rosneft\.ru/);
+  assert.match(prompt, /site:rosneft\.ru/);
+  assert.match(prompt, /recovery indexed-search attempt/);
+  assert.match(prompt, /Never return another subdomain/);
+  assert.match(prompt, /2026-08-01/);
+  assert.match(prompt, /энергетика/);
 });
 
 test('reports only complete, documented Codex usage values and marks absent or malformed usage unavailable', () => {
@@ -105,6 +124,35 @@ test('keeps Codex-discovered articles only when their host was explicitly suppli
     title: 'Official news', url: 'https://rosenergo.gov.ru/press-center/news/item-1', publishedAt: '2026-08-03', reason: 'Relevant'
   }]);
   assert.deepEqual(result.automaticDigestUrls, ['https://rosenergo.gov.ru/press-center/news/item-1']);
+});
+
+test('allows only the approved apex/www canonical host pair in either direction', () => {
+  assert.deepEqual([...canonicalHostsFor('www.rosneft.ru')], ['www.rosneft.ru', 'rosneft.ru']);
+  assert.deepEqual([...canonicalHostsFor('rosneft.ru')], ['rosneft.ru', 'www.rosneft.ru']);
+
+  for (const sourceUrl of ['https://www.rosneft.ru/press/news', 'https://rosneft.ru/press/news']) {
+    const result = normalizeAgentResult({
+      candidates: [
+        { title: 'Apex', url: 'https://rosneft.ru/news/1' },
+        { title: 'WWW', url: 'https://www.rosneft.ru/news/2' },
+        { title: 'Media', url: 'https://media.rosneft.ru/news/3' }
+      ],
+      automaticDigestUrls: [
+        'https://rosneft.ru/news/1',
+        'https://www.rosneft.ru/news/2',
+        'https://media.rosneft.ru/news/3'
+      ]
+    }, [], [sourceUrl]);
+
+    assert.deepEqual(result.candidates.map(({ url }) => url), [
+      'https://rosneft.ru/news/1',
+      'https://www.rosneft.ru/news/2'
+    ]);
+    assert.deepEqual(result.automaticDigestUrls, [
+      'https://rosneft.ru/news/1',
+      'https://www.rosneft.ru/news/2'
+    ]);
+  }
 });
 
 test('keeps dated articles within the requested inclusive date window and retains undated candidates', () => {

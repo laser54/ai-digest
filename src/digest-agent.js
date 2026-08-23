@@ -1,4 +1,4 @@
-import { normalizeAgentResult } from './digest-result.js';
+import { canonicalHostsFor, normalizeAgentResult } from './digest-result.js';
 
 export const CODEX_DISCOVERY_LUNA_MODEL = 'gpt-5.6-luna';
 export const CODEX_DISCOVERY_FALLBACK_MODEL = 'gpt-5.6-terra';
@@ -55,6 +55,12 @@ export function codexOutputSchema() {
       }
     }
   };
+}
+
+export function codexResearchPrompt({ sourceUrl, sourceArticles, themes, from, to, recovery = false }) {
+  const hosts = [...canonicalHostsFor(new URL(sourceUrl).hostname)];
+  const recoveryText = recovery ? ' This is a recovery indexed-search attempt after an empty unreachable result.' : '';
+  return `You are a careful personal news editor. Research recent news only for the user-approved source URL and its exact canonical host pair: ${hosts.join(' and ')}. Source: ${sourceUrl}. Themes: ${themes.join(', ') || 'all topics'}. Date window: ${from || 'no lower bound'} through ${to || 'no upper bound'}.${recoveryText} If direct access fails, explicitly use indexed web search with both site:${hosts[0]} and site:${hosts[1]} queries. You may use the pre-fetched candidates for this source below, but do not stop if they are empty. Return up to 12 real, directly verified article URLs only from ${hosts.join(' or ')}, with their exact titles and publication dates when available, while preserving the date and theme constraints. Never return another subdomain. Never invent URLs, titles, or dates.\nPre-fetched articles for this source: ${JSON.stringify(sourceArticles)}`;
 }
 
 const usageFields = {
@@ -131,40 +137,47 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
     const sourceArticles = articles.filter(a => a.sourceUrl === sourceUrl || (sourceHost && a.sourceHost === sourceHost));
 
     return (async () => {
-      let rawResult;
-      let usage = { available: false };
+      const attemptUsages = [];
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const recovery = attempt === 2;
+        let rawResult;
+        let usage = { available: false };
 
-      if (_mockRun) {
-        rawResult = await _mockRun({ sourceUrl, articles: sourceArticles, themes, from, to, signal });
-      } else {
-        const { Codex } = await import('@openai/codex-sdk');
-        const thread = new Codex().startThread(codexThreadOptions());
-        const prompt = `You are a careful personal news editor. Use your web tools to research recent news only for the user-approved source URL and its exact hostname. Source: ${sourceUrl}. Themes: ${themes.join(', ') || 'all topics'}. Date window: ${from || 'no lower bound'} through ${to || 'no upper bound'}. You may use the pre-fetched candidates for this source below, but do not stop if they are empty. Return up to 12 real, directly verified article URLs from the approved host only, with their exact titles and publication dates when available. Never invent URLs, titles, or dates.\nPre-fetched articles for this source: ${JSON.stringify(sourceArticles)}`;
-        const result = await thread.run(prompt, { outputSchema: codexOutputSchema(), signal });
-        rawResult = extractJson(result.finalResponse);
-        usage = normalizeCodexUsage(result.usage);
+        if (_mockRun) {
+          rawResult = await _mockRun({ sourceUrl, articles: sourceArticles, themes, from, to, signal, attempt, recovery });
+        } else {
+          const { Codex } = await import('@openai/codex-sdk');
+          const thread = new Codex().startThread(codexThreadOptions());
+          const prompt = codexResearchPrompt({ sourceUrl, sourceArticles, themes, from, to, recovery });
+          const result = await thread.run(prompt, { outputSchema: codexOutputSchema(), signal });
+          rawResult = extractJson(result.finalResponse);
+          usage = normalizeCodexUsage(result.usage);
+        }
+        attemptUsages.push(usage);
+
+        const normalized = normalizeAgentResult(rawResult, sourceArticles, [sourceUrl]);
+        const validCandidates = normalized.candidates;
+        const checkedCount = Number.isInteger(rawResult?.checkedCount) && rawResult.checkedCount >= 0 ? rawResult.checkedCount : null;
+        let outcome = rawResult?.outcome;
+        if (!['researched', 'no_relevant_articles', 'unreachable_from_research', 'blocked', 'unsupported'].includes(outcome)) {
+          outcome = validCandidates.length > 0 ? 'researched' : 'no_relevant_articles';
+        }
+
+        const retry = !signal.aborted && attempt === 1 && outcome === 'unreachable_from_research'
+          && checkedCount === 0 && validCandidates.length === 0;
+        if (retry) continue;
+
+        return {
+          sourceUrl,
+          candidates: validCandidates,
+          automaticDigestUrls: normalized.automaticDigestUrls,
+          checkedCount,
+          foundCount: validCandidates.length,
+          outcome,
+          error: null,
+          usage: aggregateCodexUsage(attemptUsages)
+        };
       }
-
-      const normalized = normalizeAgentResult(rawResult, sourceArticles, [sourceUrl]);
-      const validCandidates = normalized.candidates;
-      const validAutomatic = normalized.automaticDigestUrls;
-      const checkedCount = Number.isInteger(rawResult?.checkedCount) && rawResult.checkedCount >= 0 ? rawResult.checkedCount : null;
-
-      let outcome = rawResult?.outcome;
-      if (!['researched', 'no_relevant_articles', 'unreachable_from_research', 'blocked', 'unsupported'].includes(outcome)) {
-        outcome = validCandidates.length > 0 ? 'researched' : 'no_relevant_articles';
-      }
-
-      return {
-        sourceUrl,
-        candidates: validCandidates,
-        automaticDigestUrls: validAutomatic,
-        checkedCount,
-        foundCount: validCandidates.length,
-        outcome,
-        error: null,
-        usage
-      };
     })();
   };
 

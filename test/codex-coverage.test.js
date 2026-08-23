@@ -218,3 +218,54 @@ test('rankArticlesWithCodex deduplicates identical article URLs across multiple 
   assert.equal(result.candidates[0].url, 'https://example.com/shared-1');
   assert.deepEqual(result.automaticDigestUrls, ['https://example.com/shared-1']);
 });
+
+test('retries one empty unreachable structured result and exposes recovery attempt context', async () => {
+  const calls = [];
+  const result = await rankArticlesWithCodex({
+    sourceUrls: ['https://www.rosneft.ru/press/news'],
+    _mockRun: async (context) => {
+      calls.push({ attempt: context.attempt, recovery: context.recovery });
+      if (context.attempt === 1) return { candidates: [], automaticDigestUrls: [], checkedCount: 0, outcome: 'unreachable_from_research' };
+      return {
+        candidates: [{ title: 'Recovered', url: 'https://rosneft.ru/news/1', publishedAt: '2026-08-20', reason: 'Relevant' }],
+        automaticDigestUrls: ['https://rosneft.ru/news/1'],
+        checkedCount: 1,
+        outcome: 'researched'
+      };
+    }
+  });
+
+  assert.deepEqual(calls, [{ attempt: 1, recovery: false }, { attempt: 2, recovery: true }]);
+  assert.equal(result.researchSources[0].outcome, 'researched');
+  assert.deepEqual(result.candidates.map(({ url }) => url), ['https://rosneft.ru/news/1']);
+});
+
+test('stops after two empty unreachable structured attempts', async () => {
+  const calls = [];
+  const result = await rankArticlesWithCodex({
+    sourceUrls: ['https://example.com/news'],
+    _mockRun: async ({ attempt, recovery }) => {
+      calls.push({ attempt, recovery });
+      return { candidates: [], automaticDigestUrls: [], checkedCount: 0, outcome: 'unreachable_from_research' };
+    }
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(result.researchSources[0].outcome, 'unreachable_from_research');
+});
+
+test('does not retry no-relevant or unreachable results that checked articles', async () => {
+  const calls = new Map();
+  const result = await rankArticlesWithCodex({
+    sourceUrls: ['https://a.example.com/news', 'https://b.example.com/news'],
+    _mockRun: async ({ sourceUrl }) => {
+      calls.set(sourceUrl, (calls.get(sourceUrl) || 0) + 1);
+      return sourceUrl.includes('a.example')
+        ? { candidates: [], automaticDigestUrls: [], checkedCount: 0, outcome: 'no_relevant_articles' }
+        : { candidates: [], automaticDigestUrls: [], checkedCount: 2, outcome: 'unreachable_from_research' };
+    }
+  });
+
+  assert.deepEqual([...calls.values()], [1, 1]);
+  assert.deepEqual(result.researchSources.map(({ checkedCount }) => checkedCount), [0, 2]);
+});

@@ -5,8 +5,8 @@
 ## Контур v0
 
 - Один оператор, без аккаунтов и БД: настройки и результат существуют только в текущем браузере.
-- `POST /api/digest/prepare` валидирует пользовательские HTTP(S)-источники и запускает явный discovery-контракт: server-side prefetch — необязательный сигнал кандидатов, затем Codex web research только по разрешённым hostname.
-- Codex возвращает JSON; сервер нормализует и удаляет дубли, пропуская только ссылки с разрешённых hostname. Ответ также содержит безопасные для UI progress events (`prefetching`, `researching`, `complete`).
+- `POST /api/digest/prepare` валидирует пользовательские HTTP(S)-источники и запускает явный discovery-контракт: server-side prefetch — необязательный сигнал кандидатов, затем Codex web research только по разрешённой канонической паре hostname (apex и ровно его вариант с ведущим `www.`).
+- Codex возвращает JSON; сервер нормализует и удаляет дубли, пропуская только ссылки с разрешённой канонической пары hostname. Другие поддомены не разрешены. Ответ также содержит безопасные для UI progress events (`prefetching`, `researching`, `complete`).
 - Финальный NDJSON-`result` помимо `articles` и `automaticDigestUrls` содержит `sources` — типизированный отчёт по каждому входному URL, чтобы UI мог показывать честное покрытие, а не «обработано N»:
   - `result.sources` — массив той же длины, что и входной `sourceUrls`, в исходном порядке.
   - каждый элемент: `{ url, status, articles: [...], error: string | null }`.
