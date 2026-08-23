@@ -13,6 +13,9 @@ services:
       - /var/lib/ai-digest/codex:/codex
     networks:
       - rag-stack_internal
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     read_only: true
     tmpfs:
       - /tmp:mode=1777,size=64m

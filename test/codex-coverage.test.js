@@ -2,10 +2,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   codexOutputSchema,
+  classifyCodexResearchError,
   normalizeCodexUsage,
   aggregateCodexUsage,
   rankArticlesWithCodex
 } from '../src/digest-agent.js';
+
+test('classifyCodexResearchError safely identifies an already-used OAuth refresh token', () => {
+  const classified = classifyCodexResearchError(new Error('OAuth refresh token has already been used: secret-token'));
+
+  assert.deepEqual(classified, {
+    outcome: 'reauthentication_required',
+    errorName: 'CodexAuthenticationRequired',
+    error: 'Codex authentication expired; operator reauthentication is required'
+  });
+  assert.doesNotMatch(JSON.stringify(classified), /secret-token|already been used/i);
+});
+
+test('classifyCodexResearchError leaves generic failures generic', () => {
+  assert.deepEqual(classifyCodexResearchError(new Error('connect EAI_AGAIN api.openai.com')), {
+    outcome: 'unreachable_from_research',
+    errorName: 'CodexResearchFailed',
+    error: 'Source research failed; see server logs for details'
+  });
+});
 
 test('codexOutputSchema requires outcome and checkedCount fields', () => {
   const schema = codexOutputSchema();
@@ -130,6 +150,28 @@ test('rankArticlesWithCodex handles partial failure during research without drop
 
   assert.equal(result.candidates.length, 1);
   assert.equal(result.candidates[0].url, 'https://example.com/good/item-1');
+});
+
+test('rankArticlesWithCodex reports OAuth expiry as reauthentication_required without leaking details', async () => {
+  const result = await rankArticlesWithCodex({
+    sourceUrls: ['https://example.com/news'],
+    themes: [],
+    _mockRun: async () => {
+      const error = new Error('refresh token has already been used: operator-secret');
+      error.status = 401;
+      throw error;
+    }
+  });
+
+  assert.deepEqual(result.researchSources[0], {
+    url: 'https://example.com/news',
+    outcome: 'reauthentication_required',
+    checkedCount: null,
+    foundCount: 0,
+    errorName: 'CodexAuthenticationRequired',
+    error: 'Codex authentication expired; operator reauthentication is required'
+  });
+  assert.doesNotMatch(JSON.stringify(result), /operator-secret|already been used/i);
 });
 
 test('rankArticlesWithCodex filters out candidates from disallowed hostnames', async () => {

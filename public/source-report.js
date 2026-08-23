@@ -22,6 +22,8 @@ export function formatSourceStatus(status, kind = 'prefetch') {
       return 'Нет подходящих тем';
     case 'unreachable_from_research':
       return 'Недоступен для AI';
+    case 'reauthentication_required':
+      return 'Требуется повторный вход Codex';
     case 'unsupported':
       return 'Не поддерживается';
     default:

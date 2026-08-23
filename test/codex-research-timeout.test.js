@@ -17,6 +17,69 @@ function makeFastMock(results) {
   };
 }
 
+test('rankArticlesWithCodex uses a bounded 120-second production default', async () => {
+  const previous = process.env.CODEX_RESEARCH_TIMEOUT_MS;
+  delete process.env.CODEX_RESEARCH_TIMEOUT_MS;
+  try {
+    const result = await rankArticlesWithCodex({ sourceUrls: [] });
+
+    assert.equal(result.researchTimeoutMs, 120_000);
+    assert.ok(Number.isFinite(result.researchTimeoutMs));
+  } finally {
+    if (previous !== undefined) process.env.CODEX_RESEARCH_TIMEOUT_MS = previous;
+  }
+});
+
+test('rankArticlesWithCodex keeps the bounded default for an invalid timeout override', async () => {
+  const previous = process.env.CODEX_RESEARCH_TIMEOUT_MS;
+  process.env.CODEX_RESEARCH_TIMEOUT_MS = 'unbounded';
+  try {
+    const result = await rankArticlesWithCodex({ sourceUrls: [] });
+
+    assert.equal(result.researchTimeoutMs, 120_000);
+  } finally {
+    if (previous === undefined) delete process.env.CODEX_RESEARCH_TIMEOUT_MS;
+    else process.env.CODEX_RESEARCH_TIMEOUT_MS = previous;
+  }
+});
+
+test('rankArticlesWithCodex runs at most two source researches and preserves input order', async () => {
+  const sourceUrls = [1, 2, 3, 4, 5].map((id) => `https://${id}.example.com/news`);
+  let active = 0;
+  let maxActive = 0;
+  const result = await rankArticlesWithCodex({
+    sourceUrls,
+    _mockRun: async ({ sourceUrl }) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, sourceUrl.includes('2.') ? 5 : 20));
+      active -= 1;
+      return { candidates: [], automaticDigestUrls: [], checkedCount: 1, outcome: 'no_relevant_articles' };
+    }
+  });
+
+  assert.equal(maxActive, 2);
+  assert.deepEqual(result.researchSources.map(({ url }) => url), sourceUrls);
+});
+
+test('rankArticlesWithCodex aborts a timed-out run and keeps the typed timeout result', async () => {
+  let aborted = false;
+  const result = await rankArticlesWithCodex({
+    sourceUrls: ['https://stuck.example.com/news'],
+    _timeoutMs: 20,
+    _mockRun: ({ signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => {
+        aborted = true;
+        reject(new DOMException('aborted after timeout', 'AbortError'));
+      }, { once: true });
+    })
+  });
+
+  assert.equal(aborted, true);
+  assert.equal(result.researchSources[0].errorName, 'CodexResearchTimeout');
+  assert.equal(result.researchSources[0].error, 'Source research timed out');
+});
+
 test('rankArticlesWithCodex times out a single stuck source and marks it unreachable_from_research', async () => {
   const start = Date.now();
   const result = await rankArticlesWithCodex({

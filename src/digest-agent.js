@@ -97,14 +97,31 @@ export function aggregateCodexUsage(usages) {
   return aggregated;
 }
 
+export function classifyCodexResearchError(error) {
+  const message = typeof error?.message === 'string' ? error.message : '';
+  const authenticationRequired = error?.status === 401
+    || error?.code === 401
+    || /refresh token.*(?:already been used|expired|invalid|revoked)|authentication required|not logged in|reauthenticate/i.test(message);
+
+  return authenticationRequired ? {
+    outcome: 'reauthentication_required',
+    errorName: 'CodexAuthenticationRequired',
+    error: 'Codex authentication expired; operator reauthentication is required'
+  } : {
+    outcome: 'unreachable_from_research',
+    errorName: 'CodexResearchFailed',
+    error: 'Source research failed; see server logs for details'
+  };
+}
+
 export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], themes = [], from, to, _mockRun, _timeoutMs }) {
-  const defaultTimeoutMs = 60_000;
+  const defaultTimeoutMs = 120_000;
   const envMs = Number(process.env.CODEX_RESEARCH_TIMEOUT_MS);
   const timeoutMs = Number.isInteger(_timeoutMs) && _timeoutMs > 0
     ? _timeoutMs
     : (Number.isInteger(envMs) && envMs > 0 ? envMs : defaultTimeoutMs);
 
-  const researchTask = (sourceUrl) => {
+  const researchTask = (sourceUrl, signal) => {
     let sourceHost;
     try {
       sourceHost = new URL(sourceUrl).hostname;
@@ -118,12 +135,12 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
       let usage = { available: false };
 
       if (_mockRun) {
-        rawResult = await _mockRun({ sourceUrl, articles: sourceArticles, themes, from, to });
+        rawResult = await _mockRun({ sourceUrl, articles: sourceArticles, themes, from, to, signal });
       } else {
         const { Codex } = await import('@openai/codex-sdk');
         const thread = new Codex().startThread(codexThreadOptions());
         const prompt = `You are a careful personal news editor. Use your web tools to research recent news only for the user-approved source URL and its exact hostname. Source: ${sourceUrl}. Themes: ${themes.join(', ') || 'all topics'}. Date window: ${from || 'no lower bound'} through ${to || 'no upper bound'}. You may use the pre-fetched candidates for this source below, but do not stop if they are empty. Return up to 12 real, directly verified article URLs from the approved host only, with their exact titles and publication dates when available. Never invent URLs, titles, or dates.\nPre-fetched articles for this source: ${JSON.stringify(sourceArticles)}`;
-        const result = await thread.run(prompt, { outputSchema: codexOutputSchema() });
+        const result = await thread.run(prompt, { outputSchema: codexOutputSchema(), signal });
         rawResult = extractJson(result.finalResponse);
         usage = normalizeCodexUsage(result.usage);
       }
@@ -151,17 +168,14 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
     })();
   };
 
-  // Race each per-source task against a shared timer. If the task is still
-  // running when the timer fires, we abandon it (the underlying codex
-  // child process continues to run; we just stop awaiting it) and return a
-  // typed outcome of `unreachable_from_research` with `errorName:
-  // CodexResearchTimeout` so the UI and audit log can report a real
-  // failure mode instead of a fake progress bar.
-  const withTimeout = (sourceUrl, taskPromise) => new Promise((resolve) => {
+  const withTimeout = (sourceUrl) => new Promise((resolve) => {
     let settled = false;
+    const controller = new AbortController();
+    const taskPromise = researchTask(sourceUrl, controller.signal);
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
+      controller.abort();
       resolve({
         sourceUrl,
         candidates: [],
@@ -174,10 +188,7 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
         usage: { available: false }
       });
     }, timeoutMs);
-    // The fulfillment / rejection handlers below also consume late rejections
-    // from the abandoned task so they cannot bubble as UnhandledPromiseRejection.
-    // By design we do not surface the late failure — the timeout has already
-    // produced our typed outcome and we have stopped awaiting the SDK call.
+    // Consume the abort rejection; settled ensures it cannot replace the timeout.
     taskPromise.then(
       (value) => {
         if (settled) return;
@@ -195,16 +206,22 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
           automaticDigestUrls: [],
           checkedCount: null,
           foundCount: 0,
-          outcome: 'unreachable_from_research',
-          errorName: err?.name || 'CodexResearchFailed',
-          error: 'Source research failed; see server logs for details',
+          ...classifyCodexResearchError(err),
           usage: { available: false }
         });
       }
     );
   });
 
-  const runs = await Promise.allSettled(sourceUrls.map((sourceUrl) => withTimeout(sourceUrl, researchTask(sourceUrl))));
+  const runs = new Array(sourceUrls.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < sourceUrls.length) {
+      const index = nextIndex++;
+      runs[index] = { status: 'fulfilled', value: await withTimeout(sourceUrls[index]) };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(2, sourceUrls.length) }, worker));
 
   const researchSources = [];
   const allCandidates = [];
@@ -229,13 +246,14 @@ export async function rankArticlesWithCodex({ articles = [], sourceUrls = [], th
       allAutomatic.push(...data.automaticDigestUrls);
       usages.push(data.usage);
     } else {
+      const failure = classifyCodexResearchError(res.reason);
       researchSources.push({
         url: sourceUrl,
-        outcome: 'unreachable_from_research',
+        outcome: failure.outcome,
         checkedCount: null,
         foundCount: 0,
-        errorName: res.reason?.name || 'CodexResearchRejected',
-        error: 'Source research failed; see server logs for details'
+        errorName: failure.errorName,
+        error: failure.error
       });
       usages.push({ available: false });
     }
