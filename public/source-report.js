@@ -82,30 +82,37 @@ export function buildSourceReportData(sources = [], researchSources = []) {
 export function sourceReportSummary(sources = [], researchSources = []) {
   const report = buildSourceReportData(sources, researchSources);
   const totalCount = report.length;
-
-  let fetchedCount = 0;
-  let failedCount = 0;
-  let researchedCount = 0;
+  let aiAvailableCount = 0;
+  let candidateCount = 0;
+  let prefetchAvailableCount = 0;
+  let prefetchLimitedCount = 0;
 
   for (const item of report) {
     if (item.prefetchStatus === 'fetched' || item.prefetchStatus === 'no_articles') {
-      fetchedCount += 1;
+      prefetchAvailableCount += 1;
     } else if (item.prefetchStatus) {
-      failedCount += 1;
+      prefetchLimitedCount += 1;
     }
 
     if (item.researchOutcome === 'researched' || item.researchOutcome === 'no_relevant_articles') {
-      researchedCount += 1;
+      aiAvailableCount += 1;
     }
+    candidateCount += item.candidateCount;
   }
 
-  const message = `Обработано источников: ${totalCount} (успешно: ${fetchedCount}, с ошибкой: ${failedCount}, проверено AI: ${researchedCount}).`;
+  const aiUnavailableCount = totalCount - aiAvailableCount;
+  const continued = prefetchLimitedCount && aiAvailableCount
+    ? ' При ограничениях предзагрузки AI-исследование продолжилось.'
+    : '';
+  const message = `Источники: ${totalCount} · AI успешно: ${aiAvailableCount}, AI недоступен: ${aiUnavailableCount} · найдено кандидатов: ${candidateCount} · предзагрузка доступна: ${prefetchAvailableCount}, ограничена: ${prefetchLimitedCount}.${continued}`;
 
   return {
     totalCount,
-    fetchedCount,
-    failedCount,
-    researchedCount,
+    aiAvailableCount,
+    aiUnavailableCount,
+    candidateCount,
+    prefetchAvailableCount,
+    prefetchLimitedCount,
     message
   };
 }
@@ -129,7 +136,8 @@ export function renderSourceReport(container, sources = [], researchSources = []
 
   for (const item of report) {
     const li = document.createElement('li');
-    li.className = `source-item source-${item.prefetchStatus || 'unknown'}`;
+    const aiSucceeded = item.researchOutcome === 'researched' || item.researchOutcome === 'no_relevant_articles';
+    li.className = `source-item ${aiSucceeded ? 'ai-success' : 'ai-failure'}`;
 
     const hostSpan = document.createElement('span');
     hostSpan.className = 'source-host';
@@ -137,7 +145,7 @@ export function renderSourceReport(container, sources = [], researchSources = []
 
     const prefetchBadge = document.createElement('span');
     prefetchBadge.className = `badge status-${item.prefetchStatus || 'unknown'}`;
-    prefetchBadge.textContent = `Fetch: ${formatSourceStatus(item.prefetchStatus)}`;
+    prefetchBadge.textContent = `Предзагрузка: ${formatSourceStatus(item.prefetchStatus)}`;
 
     li.append(hostSpan, prefetchBadge);
 
@@ -148,10 +156,12 @@ export function renderSourceReport(container, sources = [], researchSources = []
       li.append(researchBadge);
     }
 
-    if (item.prefetchError || item.researchError) {
+    const prefetchError = item.prefetchError !== item.prefetchStatus ? item.prefetchError : null;
+    const displayError = item.researchError || prefetchError;
+    if (displayError) {
       const errSpan = document.createElement('span');
-      errSpan.className = 'source-error';
-      errSpan.textContent = item.prefetchError || item.researchError;
+      errSpan.className = `source-error ${item.researchError ? 'research-error' : 'prefetch-error'}`;
+      errSpan.textContent = displayError;
       li.append(errSpan);
     }
 

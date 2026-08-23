@@ -4,6 +4,7 @@ import { discoveryProgressMessage } from './discovery-progress.js';
 import { startAndPollDigest } from './digest-polling.js';
 import { tokenUsageMessage } from './token-usage.js';
 import { renderSourceReport } from './source-report.js';
+import { createArticleSource } from './article-presentation.js';
 
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
@@ -148,7 +149,7 @@ const renderDigest = (urls) => {
     anchor.target = '_blank';
     anchor.rel = 'noopener noreferrer';
     anchor.textContent = article.title;
-    item.append(anchor, article.publishedAt ? ` — ${article.publishedAt}` : '');
+    item.append(anchor, article.publishedAt ? ` — ${article.publishedAt}` : '', createArticleSource(article.url, 'digest'));
     return item;
   }));
   result.hidden = false;
@@ -245,7 +246,7 @@ form.addEventListener('submit', async (event) => {
       reason.className = 'candidate-reason';
       reason.textContent = article.reason;
       meta.append(article.publishedAt ? `${article.publishedAt} · ` : '', reason);
-      label.append(checkbox, link, meta);
+      label.append(checkbox, link, createArticleSource(article.url, 'candidate'), meta);
       return label;
     }));
     updateSelectedCount();
