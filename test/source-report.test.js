@@ -20,6 +20,7 @@ test('formatSourceStatus translates raw statuses into clear readable labels', ()
   assert.equal(formatSourceStatus('researched'), 'Проверен AI');
   assert.equal(formatSourceStatus('no_relevant_articles'), 'Нет подходящих тем');
   assert.equal(formatSourceStatus('unreachable_from_research'), 'Недоступен для AI');
+  assert.equal(formatSourceStatus('reauthentication_required'), 'Требуется повторный вход Codex');
   assert.equal(formatSourceStatus('unsupported'), 'Не поддерживается');
   assert.equal(formatSourceStatus('unknown'), 'Неизвестный статус');
 });

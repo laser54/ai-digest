@@ -34,6 +34,8 @@ The public interface and health endpoint are visible, but every AI execution req
 
 The DNS `A`/`AAAA` record must resolve to the Traefik VPS before first deployment so Let's Encrypt can issue a certificate. The container runs as the unprivileged Node user with a read-only root filesystem, small `/tmp`, dropped Linux capabilities and no host port.
 
+Codex research is bounded to 120 seconds per source by default; set `CODEX_RESEARCH_TIMEOUT_MS` to a positive integer in the runtime environment to override it.
+
 ## Проверка
 
 ```bash
