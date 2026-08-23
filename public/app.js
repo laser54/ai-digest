@@ -5,6 +5,7 @@ import { startAndPollDigest } from './digest-polling.js';
 import { tokenUsageMessage } from './token-usage.js';
 import { renderSourceReport } from './source-report.js';
 import { createArticleSource } from './article-presentation.js';
+import { formatDigestForClipboard } from './digest-clipboard.js';
 
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
@@ -185,9 +186,9 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const scrollTo = (element) => element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
 
 const copyDigest = async () => {
-  const lines = [...links.querySelectorAll('a')].map((anchor) => `- [${anchor.textContent}](${anchor.href})`);
-  if (!lines.length) return;
-  const text = lines.join('\n');
+  const items = [...links.querySelectorAll('a')].map((anchor) => ({ title: anchor.textContent, url: anchor.href }));
+  const text = formatDigestForClipboard(items);
+  if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -199,7 +200,7 @@ const copyDigest = async () => {
     area.remove();
   }
   status.dataset.kind = 'ok';
-  status.textContent = `Скопировано ссылок: ${lines.length}.`;
+  status.textContent = `Скопировано ссылок: ${items.length}.`;
 };
 
 document.querySelector('#copy-digest').addEventListener('click', copyDigest);

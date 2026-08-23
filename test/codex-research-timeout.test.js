@@ -64,10 +64,12 @@ test('rankArticlesWithCodex runs at most two source researches and preserves inp
 
 test('rankArticlesWithCodex aborts a timed-out run and keeps the typed timeout result', async () => {
   let aborted = false;
+  let calls = 0;
   const result = await rankArticlesWithCodex({
     sourceUrls: ['https://stuck.example.com/news'],
     _timeoutMs: 20,
     _mockRun: ({ signal }) => new Promise((resolve, reject) => {
+      calls += 1;
       signal.addEventListener('abort', () => {
         aborted = true;
         reject(new DOMException('aborted after timeout', 'AbortError'));
@@ -76,6 +78,7 @@ test('rankArticlesWithCodex aborts a timed-out run and keeps the typed timeout r
   });
 
   assert.equal(aborted, true);
+  assert.equal(calls, 1);
   assert.equal(result.researchSources[0].errorName, 'CodexResearchTimeout');
   assert.equal(result.researchSources[0].error, 'Source research timed out');
 });
