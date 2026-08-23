@@ -28,9 +28,27 @@ export const settingsSchema = z.object({
 });
 
 const PUBLIC_ERROR_MESSAGE = 'Failed to prepare digest';
+const DIGEST_HEARTBEAT_INTERVAL_MS = 15_000;
 
 function publicErrorPayload(requestId) {
   return { error: PUBLIC_ERROR_MESSAGE, requestId };
+}
+
+export function startDigestHeartbeat(res, clock = globalThis) {
+  const timer = clock.setInterval(() => {
+    if (!res.writableEnded && !res.destroyed) {
+      res.write(encodeDigestStreamEvent('heartbeat', {}));
+    }
+  }, DIGEST_HEARTBEAT_INTERVAL_MS);
+  timer.unref?.();
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    clock.clearInterval(timer);
+  };
+  res.once('close', stop);
+  return stop;
 }
 
 const app = express();
@@ -42,29 +60,40 @@ app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '
 
 app.post('/api/digest/prepare', (req, res, next) => createExecutionAuth(process.env.ADMIN_PASSWORD)(req, res, next), async (req, res) => {
   const logger = new AuditLogger();
+  let stopHeartbeat = () => {};
   try {
     const input = requestSchema.parse(req.body);
     await Promise.all(input.sourceUrls.map(validatePublicHttpUrl));
     const progress = [];
     res.type('application/x-ndjson');
+    res.set({
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no'
+    });
     res.flushHeaders();
+    stopHeartbeat = startDigestHeartbeat(res);
+    req.once('aborted', stopHeartbeat);
     const digest = await discoverDigest(input, {
       prefetchArticles: (urls) => fetchArticles(urls, 20, { logger }),
       researchWithCodex: (args) => rankArticlesWithCodex({ ...args, logger }),
       logger
     }, (event) => {
       progress.push(event);
-      res.write(encodeDigestStreamEvent('progress', event));
+      if (!res.writableEnded && !res.destroyed) {
+        res.write(encodeDigestStreamEvent('progress', event));
+      }
     });
-    res.end(encodeDigestStreamEvent('result', {
-      articles: digest.candidates,
-      automaticDigestUrls: digest.automaticDigestUrls,
-      progress,
-      sources: digest.sources || [],
-      researchSources: digest.researchSources || [],
-      tokenUsage: digest.tokenUsage || { available: false },
-      requestId: logger.requestId
-    }));
+    if (!res.writableEnded && !res.destroyed) {
+      res.end(encodeDigestStreamEvent('result', {
+        articles: digest.candidates,
+        automaticDigestUrls: digest.automaticDigestUrls,
+        progress,
+        sources: digest.sources || [],
+        researchSources: digest.researchSources || [],
+        tokenUsage: digest.tokenUsage || { available: false },
+        requestId: logger.requestId
+      }));
+    }
   } catch (error) {
     logger.error('digest.request.failed', {
       errorName: error?.name || 'UnknownError',
@@ -72,10 +101,15 @@ app.post('/api/digest/prepare', (req, res, next) => createExecutionAuth(process.
       zodIssues: Array.isArray(error?.issues) ? error.issues.length : null
     });
     if (res.headersSent) {
-      res.end(encodeDigestStreamEvent('error', publicErrorPayload(logger.requestId)));
+      if (!res.writableEnded && !res.destroyed) {
+        res.end(encodeDigestStreamEvent('error', publicErrorPayload(logger.requestId)));
+      }
       return;
     }
     res.status(400).json(publicErrorPayload(logger.requestId));
+  } finally {
+    stopHeartbeat();
+    req.off('aborted', stopHeartbeat);
   }
 });
 
