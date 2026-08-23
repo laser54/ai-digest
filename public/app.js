@@ -1,7 +1,7 @@
 import { loadSources, saveSources, sourceUrlsForDigest, fetchSettings, saveSettingsToServer } from './source-workspace.js';
 import { loadThemes, saveThemes, themesForDigest } from './theme-workspace.js';
 import { discoveryProgressMessage } from './discovery-progress.js';
-import { readDigestStream } from './digest-response.js';
+import { startAndPollDigest } from './digest-polling.js';
 import { tokenUsageMessage } from './token-usage.js';
 import { renderSourceReport } from './source-report.js';
 
@@ -207,7 +207,7 @@ form.addEventListener('submit', async (event) => {
   event.preventDefault();
   form.setAttribute('aria-busy', 'true');
   prepareButton.disabled = true;
-  renderDiscoveryProgress({ phase: 'prefetching', sourceCount: sourceUrlsForDigest(sources).length });
+  renderDiscoveryProgress({ phase: 'queued' });
   review.hidden = true;
   result.hidden = true;
   tokenUsage.hidden = true;
@@ -217,16 +217,13 @@ form.addEventListener('submit', async (event) => {
   try {
     const sourceUrls = sourceUrlsForDigest(sources);
     if (!sourceUrls.length) throw new Error('Включите хотя бы один источник для AI-отбора.');
-    const response = await fetch('/api/digest/prepare', { method: 'POST', headers: {
-      'content-type': 'application/json'
-    }, body: JSON.stringify({
+    const body = await startAndPollDigest({
       sourceUrls,
       themes: themesForDigest(themes),
       from: document.querySelector('#from').value,
       to: document.querySelector('#to').value,
       executionPassword: document.querySelector('#execution-password').value
-    }) });
-    const body = await readDigestStream(response, renderDiscoveryProgress);
+    }, { onProgress: renderDiscoveryProgress });
     articles = body.articles;
     automaticDigestUrls = body.automaticDigestUrls;
     tokenUsage.textContent = tokenUsageMessage(body.tokenUsage);
