@@ -8,6 +8,8 @@ function plural(count, one, few, many) {
 
 export function discoveryProgressMessage(event) {
   switch (event.phase) {
+    case 'queued':
+      return 'Запрос поставлен в очередь…';
     case 'prefetching':
       return `Обрабатываем ${event.sourceCount} ${plural(event.sourceCount, 'источник', 'источника', 'источников')}…`;
     case 'prefetched':
