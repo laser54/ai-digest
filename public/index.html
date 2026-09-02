@@ -36,6 +36,9 @@
           <p id="theme-empty">Добавьте тематики, чтобы AI учитывал их при отборе.</p>
           <div id="theme-list" aria-label="Выбранные тематики" aria-live="polite"></div>
         </div>
+        <label for="editorial-prompt">Дополнительный редакционный критерий</label>
+        <textarea id="editorial-prompt" maxlength="4000" rows="8" placeholder="Например: включать только фактические внедрения конкретной технологии..."></textarea>
+        <p class="field-hint">Критерий сохраняется в настройках и применяется как дополнительный фильтр, не отменяя ограничения по источникам, датам и проверке ссылок.</p>
         <label for="execution-password">Пароль для AI-отбора</label>
         <input id="execution-password" type="password" required autocomplete="current-password" />
         <div class="dates">

@@ -20,12 +20,13 @@ test('authenticated start and status endpoints keep password only in JSON auth b
   };
   await withServer(createApp({ password: 'пароль🔐', jobs }), async (base) => {
     const start = await fetch(`${base}/api/digest/jobs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
-      sourceUrls: ['https://example.com/news'], themes: [], from: '', to: '', submissionId: 'submission_0123456789abcdef', executionPassword: 'пароль🔐'
+      sourceUrls: ['https://example.com/news'], themes: [], editorialPrompt: '  Только внедрения  ', from: '', to: '', submissionId: 'submission_0123456789abcdef', executionPassword: 'пароль🔐'
     }) });
     assert.equal(start.status, 202);
     assert.deepEqual(await start.json(), { jobId: 'job_opaque', status: 'queued', reused: false });
     assert.equal('executionPassword' in submitted, false);
     assert.equal(submitted.submissionId, 'submission_0123456789abcdef');
+    assert.equal(submitted.editorialPrompt, 'Только внедрения');
 
     const status = await fetch(`${base}/api/digest/jobs/status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jobId: 'job_opaque', executionPassword: 'пароль🔐' }) });
     assert.equal(status.status, 200);

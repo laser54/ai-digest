@@ -116,6 +116,23 @@ test('rankArticlesWithCodex produces per-source coverage for two sources with di
   assert.equal(result.candidates[0].url, 'https://example.com/source-a/post-1');
 });
 
+test('rankArticlesWithCodex propagates the exact editorial prompt to every per-source research run', async () => {
+  const criterion = 'Только фактические интеграции конкретной технологии.';
+  const seen = [];
+  await rankArticlesWithCodex({
+    sourceUrls: ['https://example.com/source-a', 'https://example.com/source-b'],
+    editorialPrompt: criterion,
+    _mockRun: async ({ sourceUrl, editorialPrompt }) => {
+      seen.push({ sourceUrl, editorialPrompt });
+      return { candidates: [], automaticDigestUrls: [], checkedCount: 0, outcome: 'no_relevant_articles' };
+    }
+  });
+  assert.deepEqual(seen, [
+    { sourceUrl: 'https://example.com/source-a', editorialPrompt: criterion },
+    { sourceUrl: 'https://example.com/source-b', editorialPrompt: criterion }
+  ]);
+});
+
 test('rankArticlesWithCodex handles partial failure during research without dropping other sources', async () => {
   const mockRun = async ({ sourceUrl }) => {
     if (sourceUrl.includes('/good')) {

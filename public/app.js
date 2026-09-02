@@ -6,6 +6,7 @@ import { tokenUsageMessage } from './token-usage.js';
 import { renderSourceReport } from './source-report.js';
 import { createArticleSource } from './article-presentation.js';
 import { formatDigestForClipboard } from './digest-clipboard.js';
+import { loadEditorialPrompt, saveEditorialPrompt } from './editorial-prompt-workspace.js';
 
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
@@ -22,16 +23,18 @@ let articles = [];
 let automaticDigestUrls = [];
 let sources = loadSources(localStorage);
 let themes = loadThemes(localStorage);
+let editorialPrompt = loadEditorialPrompt(localStorage);
 
 const sourceList = document.querySelector('#source-list');
 const sourceEmpty = document.querySelector('#source-empty');
 const themeList = document.querySelector('#theme-list');
 const themeEmpty = document.querySelector('#theme-empty');
 const themeInput = document.querySelector('#theme-input');
+const editorialPromptInput = document.querySelector('#editorial-prompt');
 
 const syncToServer = async () => {
   try {
-    await saveSettingsToServer({ sources, themes });
+    await saveSettingsToServer({ sources, themes, editorialPrompt });
   } catch (error) {
     console.error('Failed to sync settings to server:', error);
   }
@@ -102,29 +105,40 @@ document.querySelector('#source-form').addEventListener('submit', (event) => {
 const initSettings = async () => {
   const localSources = loadSources(localStorage);
   const localThemes = loadThemes(localStorage);
+  const localEditorialPrompt = loadEditorialPrompt(localStorage);
   try {
     const serverSettings = await fetchSettings();
     if (
       serverSettings.sources.length === 0 &&
       serverSettings.themes.length === 0 &&
-      (localSources.length > 0 || localThemes.length > 0)
+      !serverSettings.editorialPrompt &&
+      (localSources.length > 0 || localThemes.length > 0 || localEditorialPrompt)
     ) {
       sources = localSources;
       themes = localThemes;
-      await saveSettingsToServer({ sources, themes });
+      editorialPrompt = localEditorialPrompt;
+      await saveSettingsToServer({ sources, themes, editorialPrompt });
     } else {
       sources = saveSources(localStorage, serverSettings.sources);
       themes = saveThemes(localStorage, serverSettings.themes);
+      editorialPrompt = saveEditorialPrompt(localStorage, serverSettings.editorialPrompt);
     }
   } catch (error) {
     console.warn('Could not fetch server settings, using local fallback:', error);
   } finally {
     renderSources();
     renderThemes();
+    editorialPromptInput.value = editorialPrompt;
   }
 };
 
 initSettings();
+
+editorialPromptInput.addEventListener('change', () => {
+  editorialPrompt = saveEditorialPrompt(localStorage, editorialPromptInput.value);
+  editorialPromptInput.value = editorialPrompt;
+  syncToServer();
+});
 
 const addTheme = () => {
   const nextThemes = themesForDigest([...themes, themeInput.value]);
@@ -222,6 +236,7 @@ form.addEventListener('submit', async (event) => {
     const body = await startAndPollDigest({
       sourceUrls,
       themes: themesForDigest(themes),
+      editorialPrompt,
       from: document.querySelector('#from').value,
       to: document.querySelector('#to').value,
       executionPassword: document.querySelector('#execution-password').value
