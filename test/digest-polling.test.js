@@ -27,7 +27,7 @@ test('starts then polls without overlap, reports progress, and returns completio
     inFlight -= 1;
     return reply;
   };
-  const result = await startAndPollDigest({ sourceUrls: ['https://example.com'], executionPassword: 'пароль' }, {
+  const result = await startAndPollDigest({ sourceUrls: ['https://example.com'], editorialPrompt: 'Только пилоты', executionPassword: 'пароль' }, {
     fetch,
     sleep: async () => {},
     timeoutSignal: (ms) => ({ timeout: ms }),
@@ -38,6 +38,7 @@ test('starts then polls without overlap, reports progress, and returns completio
   assert.deepEqual(progress, [{ phase: 'researching' }]);
   assert.deepEqual(calls.map(([url]) => url), ['/api/digest/jobs', '/api/digest/jobs/status', '/api/digest/jobs/status']);
   assert.equal(calls[0][1].submissionId, 'submission_browser_generated');
+  assert.equal(calls[0][1].editorialPrompt, 'Только пилоты');
   assert.deepEqual(calls[1][1], { jobId: 'job_opaque', executionPassword: 'пароль' });
   assert.deepEqual(signals, [{ timeout: 15_000 }, { timeout: 15_000 }, { timeout: 15_000 }]);
 });

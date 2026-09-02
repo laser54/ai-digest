@@ -16,7 +16,7 @@ AI Digest combines a bounded server-side prefetch with per-source Codex indexed 
 
 ## What I built
 
-- A source and theme workspace with an optional inclusive date window.
+- A source and theme workspace with a persistent operator-provided editorial criterion and an optional inclusive date window.
 - An in-memory background job API so long research runs survive short browser request failures.
 - Explicit submission idempotency, active identical-input deduplication, and a global FIFO queue that runs one digest at a time.
 - SSRF-aware HTML prefetch with typed per-source outcomes instead of a misleading all-or-nothing success state.
@@ -31,7 +31,7 @@ The application uses Node.js 22, Express 5, vanilla JavaScript and CSS, Cheerio,
 
 ```text
 Browser
-  │ submit sources, themes, dates, password, submission ID
+  │ submit sources, themes, editorial criterion, dates, password, submission ID
   ▼
 Express job API ──▶ in-memory FIFO queue (one digest globally)
   ▲                         │
@@ -71,7 +71,22 @@ Codex researches every submitted source independently with indexed web search en
 
 A second and final attempt is made only when the first structured result is `unreachable_from_research`, `checkedCount` is `0`, and it contains no valid candidates. Other empty, blocked, unsupported, timed-out, or partially checked outcomes are not retried.
 
-The prompt carries the selected themes and date window. Unlike dated prefetch results, Codex-discovered dates are not independently re-fetched and server-side post-filtered. Their date compliance relies on the research prompt and structured model output, which is an explicit trust boundary.
+The prompt carries the selected themes, date window, and saved `editorialPrompt`. The editorial prompt is an additional filter only: it cannot relax the approved host boundary, date window, directly verified real-URL requirement, or no-invention rules. Article pages and candidates are treated as untrusted research data, so instructions embedded in them must not be followed. Unlike dated prefetch results, Codex-discovered dates are not independently re-fetched and server-side post-filtered. Their date compliance relies on the research prompt and structured model output, which is an explicit trust boundary.
+
+The Russian textarea in the launch form stores a trimmed value of at most 4000 characters in the existing shared settings JSON and browser localStorage flow. Older settings files without `editorialPrompt` load it as an empty string. An empty value is passed to research as an explicit neutral additional criterion.
+
+Example criterion (edit it to suit the digest; it is not hardcoded):
+
+```text
+Ищи только новости, где описывается фактическое внедрение, запуск, пилотирование, интеграция или использование конкретной технологии либо инновации в российской компании.
+
+В статье должны быть явно указаны:
+1. российская компания;
+2. конкретная технология, технологический продукт или инновационный процесс;
+3. факт практического внедрения, запуска, пилота, интеграции, перехода в эксплуатацию или использования.
+
+Не включай планы и намерения без факта внедрения, общие статьи о трендах, инвестиции без технологического результата и материалы без достаточного подтверждения.
+```
 
 ### Approved URL boundary
 
@@ -163,7 +178,7 @@ Codex authentication must already be valid in that runtime directory. It is refr
 - Password protection is an execution-cost gate, not user identity, authorization roles, or tenant isolation.
 - Source validation blocks credentials, nonstandard ports, and DNS results in loopback, private, link-local, multicast, and reserved IPv4 ranges, plus the covered non-public IPv6 ranges.
 - Codex runs with network and indexed web search enabled but a read-only sandbox, no approvals, and no Git checkout requirement.
-- Settings contain source URLs and themes, not secrets. The settings API is public and is not an authentication boundary.
+- Settings contain source URLs, themes, and the editorial prompt, not secrets. The settings API is public and is not an authentication boundary.
 
 If this service is exposed to untrusted users, place a real outer access layer in front of the whole application. The current shared-password and public-settings design is for one trusted operator, not a public multi-user service.
 

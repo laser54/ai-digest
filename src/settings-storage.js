@@ -1,6 +1,8 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+const normalizeEditorialPrompt = (value) => typeof value === 'string' ? value.trim().slice(0, 4000) : '';
+
 export function getSettingsFilePath() {
   if (process.env.SETTINGS_FILE) {
     return process.env.SETTINGS_FILE;
@@ -16,10 +18,11 @@ export async function readSettings() {
     const parsed = JSON.parse(raw);
     return {
       sources: Array.isArray(parsed?.sources) ? parsed.sources : [],
-      themes: Array.isArray(parsed?.themes) ? parsed.themes : []
+      themes: Array.isArray(parsed?.themes) ? parsed.themes : [],
+      editorialPrompt: normalizeEditorialPrompt(parsed?.editorialPrompt)
     };
   } catch {
-    return { sources: [], themes: [] };
+    return { sources: [], themes: [], editorialPrompt: '' };
   }
 }
 
@@ -30,7 +33,8 @@ export async function writeSettings(settings) {
 
   const data = {
     sources: Array.isArray(settings?.sources) ? settings.sources : [],
-    themes: Array.isArray(settings?.themes) ? settings.themes : []
+    themes: Array.isArray(settings?.themes) ? settings.themes : [],
+    editorialPrompt: normalizeEditorialPrompt(settings?.editorialPrompt)
   };
 
   await writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');

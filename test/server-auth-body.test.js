@@ -22,6 +22,13 @@ test('requestSchema strips executionPassword from the parsed input', () => {
 test('requestSchema succeeds without an executionPassword field', () => {
   const parsed = requestSchema.parse({ sourceUrls: ['https://example.com/news'] });
   assert.equal('executionPassword' in parsed, false);
+  assert.equal(parsed.editorialPrompt, '');
+});
+
+test('requestSchema trims editorialPrompt and enforces its 4000 character maximum', () => {
+  const parsed = requestSchema.parse({ sourceUrls: ['https://example.com/news'], editorialPrompt: '  Только внедрения  ' });
+  assert.equal(parsed.editorialPrompt, 'Только внедрения');
+  assert.throws(() => requestSchema.parse({ sourceUrls: ['https://example.com/news'], editorialPrompt: 'x'.repeat(4001) }));
 });
 
 test('settingsSchema also strips unknown fields including any future executionPassword', () => {

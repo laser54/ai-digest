@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { readSettings, writeSettings } from '../src/settings-storage.js';
@@ -13,7 +13,7 @@ test('settings storage defaults to empty arrays when file is missing or invalid'
 
   try {
     const settings = await readSettings();
-    assert.deepEqual(settings, { sources: [], themes: [] });
+    assert.deepEqual(settings, { sources: [], themes: [], editorialPrompt: '' });
   } finally {
     process.env.SETTINGS_FILE = original;
     await rm(dir, { recursive: true, force: true });
@@ -28,12 +28,13 @@ test('settings storage writes and reads normalized settings', async () => {
   try {
     const data = {
       sources: [{ url: 'https://example.com/news', enabled: true }],
-      themes: ['AI', 'Разработка']
+      themes: ['AI', 'Разработка'],
+      editorialPrompt: '  Только внедрения  '
     };
 
     await writeSettings(data);
     const read = await readSettings();
-    assert.deepEqual(read, data);
+    assert.deepEqual(read, { ...data, editorialPrompt: 'Только внедрения' });
   } finally {
     process.env.SETTINGS_FILE = original;
     await rm(dir, { recursive: true, force: true });
@@ -54,11 +55,12 @@ test('GET and PUT /api/settings endpoints retrieve and update configuration', as
     const getRes = await fetch(`${baseUrl}/api/settings`);
     assert.equal(getRes.status, 200);
     const getBody = await getRes.json();
-    assert.deepEqual(getBody, { sources: [], themes: [] });
+    assert.deepEqual(getBody, { sources: [], themes: [], editorialPrompt: '' });
 
     const payload = {
       sources: [{ url: 'https://example.com/rss', enabled: true }],
-      themes: ['AI', 'Продукты']
+      themes: ['AI', 'Продукты'],
+      editorialPrompt: '  Только подтверждённые пилоты  '
     };
 
     const putRes = await fetch(`${baseUrl}/api/settings`, {
@@ -68,11 +70,12 @@ test('GET and PUT /api/settings endpoints retrieve and update configuration', as
     });
     assert.equal(putRes.status, 200);
     const putBody = await putRes.json();
-    assert.deepEqual(putBody, payload);
+    const normalizedPayload = { ...payload, editorialPrompt: 'Только подтверждённые пилоты' };
+    assert.deepEqual(putBody, normalizedPayload);
 
     const getUpdated = await fetch(`${baseUrl}/api/settings`);
     const updatedBody = await getUpdated.json();
-    assert.deepEqual(updatedBody, payload);
+    assert.deepEqual(updatedBody, normalizedPayload);
 
     // Test invalid URL validation
     const invalidRes = await fetch(`${baseUrl}/api/settings`, {
@@ -85,6 +88,28 @@ test('GET and PUT /api/settings endpoints retrieve and update configuration', as
     server.close();
     process.env.SETTINGS_FILE = originalSettings;
     process.env.ADMIN_PASSWORD = originalAdmin;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('settings storage reads legacy JSON without editorialPrompt and settings API rejects values over 4000 chars', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ai-digest-test-'));
+  const original = process.env.SETTINGS_FILE;
+  process.env.SETTINGS_FILE = path.join(dir, 'settings.json');
+  await writeFile(process.env.SETTINGS_FILE, JSON.stringify({ sources: [], themes: ['AI'] }), 'utf8');
+  const server = app.listen(0);
+
+  try {
+    assert.deepEqual(await readSettings(), { sources: [], themes: ['AI'], editorialPrompt: '' });
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sources: [], themes: [], editorialPrompt: 'x'.repeat(4001) })
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    server.close();
+    process.env.SETTINGS_FILE = original;
     await rm(dir, { recursive: true, force: true });
   }
 });

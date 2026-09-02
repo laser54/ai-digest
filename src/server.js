@@ -16,6 +16,7 @@ import { AuditLogger } from './logging.js';
 export const requestSchema = z.object({
   sourceUrls: z.array(z.string().url()).min(1).max(10),
   themes: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+  editorialPrompt: z.string().trim().max(4000).default(''),
   from: z.string().date().optional().or(z.literal('')),
   to: z.string().date().optional().or(z.literal(''))
 });
@@ -29,7 +30,8 @@ export const settingsSchema = z.object({
     url: z.string().url(),
     enabled: z.boolean().default(true)
   })).max(50).default([]),
-  themes: z.array(z.string().trim().min(1).max(80)).max(50).default([])
+  themes: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+  editorialPrompt: z.string().trim().max(4000).default('')
 });
 
 const PUBLIC_ERROR_MESSAGE = 'Failed to prepare digest';
