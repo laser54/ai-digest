@@ -1,5 +1,5 @@
 # Existing production, single replica; jobs are process-local.
-# ACME remains off until separately approved DNS cutover.
+# ACME enabled after protected cutover and authoritative DNS verification.
 services:
   app:
     build:
@@ -43,6 +43,7 @@ services:
       - traefik.http.routers.aidigest-https.rule=Host(`ai-digest.larin.work`)
       - traefik.http.routers.aidigest-https.entrypoints=https
       - traefik.http.routers.aidigest-https.tls=true
+      - traefik.http.routers.aidigest-https.tls.certresolver=letsencrypt
       - traefik.http.routers.aidigest-https.service=aidigest
       - traefik.http.services.aidigest.loadbalancer.server.port=3030
 networks:
