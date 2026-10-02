@@ -8,6 +8,16 @@ GitHub App source `laser54/ai-digest/main`, raw Compose `/docker-compose.coolify
 
 Native Docker build, no legacy SSH deploy or GHCR image-tag indirection. CI tests and builds only. Keep non-root node, read-only root, init, no-new-privileges, dropped capabilities, pids_limit and tmpfs. Only /codex is persistent; actual volume must be discovered from container mounts. Runtime-only ADMIN_PASSWORD comes from `AI_DIGEST_PROD_ADMIN_PASSWORD` in Bitwarden through Coolify; no build argument secrets.
 
+## Completed production cutover — 2026-10-02
+
+Both runtimes stopped before final snapshot; no Codex child was active on source. Restored final /codex manifest (313 files), SQLite integrity verified, auth/settings preserved. Only A record `ai-digest.larin.work` id `571022547` changed `107.174.26.138` → `38.45.65.134`, TTL 600. Provider readback and all 4 authoritative nameservers confirmed; unrelated DNS unchanged. ACME enabled afterward; trusted forced-new and normal public HTTPS health passed.
+
+One real job `job_5p0hjO8GFO6hbyIucBOYI9uFnFhDd1X7` ran against the first enabled saved source (ALROSA), preserved themes/editorial criterion and a 30-day window. Terminal status **complete**, research **researched**, checkedCount=1, foundCount=1, articles=1. SDK usage available: input=138871, cached=91136, output=1213, reasoning=405. No orphan Codex process remained. This is runtime evidence, not a claim of comprehensive coverage or independently verified accuracy of the returned article.
+
+Final backup and smoke result retained privately under `/root/.hermes/profiles/boss/backups/ai-digest-final-20261002/`; matching snapshot archive is retained on old host `/root/migration-backups/ai-digest-final-20261002/`. Old app remains stopped; old data not deleted. After destination OAuth refresh, rollback must transfer newest auth/settings before source restart. In-memory pre-cutover jobs/results cannot be retained.
+
+Preparation checks below are historical; trusted TLS and real generation are now accepted as above.
+
 ## Preparation acceptance
 
 New resource is running:healthy. Native build and restore exercised: all 313 snapshot file hashes matched and SQLite integrity passed. /codex write probe as non-root passed and was removed. Settings API matched restored settings; status endpoint rejected absent execution password (401) and accepted the preserved password (404 for absent job). This does not prove real Codex generation.
