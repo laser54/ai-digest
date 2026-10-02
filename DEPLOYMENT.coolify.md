@@ -10,6 +10,12 @@ Native Docker build, no legacy SSH deploy or GHCR image-tag indirection. CI test
 
 ## Preparation acceptance
 
+New resource is running:healthy. Native build and restore exercised: all 313 snapshot file hashes matched and SQLite integrity passed. /codex write probe as non-root passed and was removed. Settings API matched restored settings; status endpoint rejected absent execution password (401) and accepted the preserved password (404 for absent job). This does not prove real Codex generation.
+
+Pre-cutover frontend/health routing passed with forced new IP and insecure TLS only; trusted production TLS is NOT accepted yet. ADMIN_PASSWORD actual container equals Coolify/BWS. Runtime read-only/non-root/init/cap-drop/no-new-privileges/pids-limit/no-host-ports verified.
+
+Only qs and undici lock entries updated for existing advisories; npm audit reports 0 vulnerabilities, SDK unchanged.
+
 Local suite: 125 tests passed. Existing auth/settings and Codex service state snapshot captured: SQLite backup API merges live WAL safely, integrity checked; non-SQLite files copied, auth/settings hashes checked before/after. Transient /codex/tmp excluded. Auth/session archives are sensitive; keep backups private, never Git or browser bundles.
 
 Preparation snapshot is not the final cutover snapshot. No app jobs/results DB: in-memory queues/results disappear on restart. New settings/auth must be refreshed after separately approved old stop.
