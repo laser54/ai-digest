@@ -1,11 +1,12 @@
 import { filterArticlesByDate } from './digest-result.js';
 import { AuditLogger } from './logging.js';
+import { requiresImplementationEvidence } from './evidence.js';
 
 function sourceHosts(sourceUrls) {
   return [...new Set(sourceUrls.map((sourceUrl) => new URL(sourceUrl).hostname))];
 }
 
-export async function discoverDigest(input, { prefetchArticles, researchWithCodex, logger }, onProgress = () => {}) {
+export async function discoverDigest(input, { prefetchArticles, researchWithCodex, verifyArticleEvidence, logger }, onProgress = () => {}) {
   const auditLogger = logger || new AuditLogger();
   const reqStart = Date.now();
   const sourceCount = input.sourceUrls.length;
@@ -82,11 +83,38 @@ export async function discoverDigest(input, { prefetchArticles, researchWithCode
     });
   }
 
-  onProgress({ phase: 'complete', sourceCount, candidateCount: digest.candidates.length });
+  let candidates = filterArticlesByDate(digest.candidates || [], input.from, input.to);
+  if (requiresImplementationEvidence(input.editorialPrompt) && verifyArticleEvidence) {
+    let nextIndex = 0;
+    const verifyWorker = async () => {
+      while (nextIndex < candidates.length) {
+        const index = nextIndex++;
+        const verification = await verifyArticleEvidence(candidates[index]);
+        candidates[index] = { ...candidates[index], ...verification };
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, candidates.length) }, verifyWorker));
+  }
+  const candidateByUrl = new Map(candidates.map((article) => [article.url, article]));
+  const automaticDigestUrls = [...new Set(digest.automaticDigestUrls || [])]
+    .filter((url) => candidateByUrl.has(url) && candidateByUrl.get(url).dateStatus !== 'unconfirmed');
+  const filteredAutomatic = requiresImplementationEvidence(input.editorialPrompt)
+    ? automaticDigestUrls.filter((url) => candidateByUrl.get(url).verification === 'fetched_verified' && candidateByUrl.get(url).autoEligible === true)
+    : automaticDigestUrls;
+  digest = { ...digest, candidates, automaticDigestUrls: filteredAutomatic };
+  const finalCandidateUrls = new Set(candidates.map((article) => article.url));
+  for (const source of sources || []) {
+    source.articles = (source.articles || []).filter((article) => finalCandidateUrls.has(article.url));
+  }
+  for (const source of digest.researchSources || []) {
+    const hostname = (value) => { try { return new URL(value).hostname.replace(/^www\./, ''); } catch { return ''; } };
+    source.foundCount = candidates.filter((article) => hostname(article.url) === hostname(source.url)).length;
+  }
+  onProgress({ phase: 'complete', sourceCount, candidateCount: candidates.length });
 
   const totalDurationMs = Date.now() - reqStart;
   auditLogger.info('digest.request.completed', {
-    candidateCount: digest.candidates.length,
+    candidateCount: candidates.length,
     durationMs: totalDurationMs
   });
 

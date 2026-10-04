@@ -28,6 +28,12 @@
         <div id="source-list" aria-live="polite"></div>
       </section>
 
+      <section id="history-section" aria-labelledby="history-heading">
+        <div class="section-head"><h2 id="history-heading">История выпусков</h2><button id="history-refresh" type="button">Обновить</button></div>
+        <p id="history-status" role="status" aria-live="polite">Выпуски хранятся 180 дней.</p>
+        <div id="history-list" aria-live="polite"></div>
+      </section>
+
       <form id="digest-form">
         <div class="section-head"><h2>Запуск</h2></div>
         <div class="theme-workspace">
@@ -66,10 +72,21 @@
         <button id="manual" type="button">Сформировать из отмеченных</button>
       </section>
 
+      <section id="retry-panel" hidden aria-labelledby="retry-heading">
+        <div class="section-head"><h2 id="retry-heading">Повтор источников</h2></div>
+        <p>Можно явно повторить только источники со сбоем. Успешные и источники без подходящих материалов не запускаются повторно.</p>
+        <div id="retry-sources"></div>
+        <button id="retry-start" type="button">Повторить выбранные источники</button>
+        <p id="retry-status" role="status" aria-live="polite"></p>
+        <div id="retry-attempts" aria-live="polite"></div>
+      </section>
+
       <section id="result" hidden>
         <div class="section-head"><h2>Готовый дайджест</h2></div>
         <ul id="digest-links"></ul>
-        <div class="result-actions"><button id="copy-digest" type="button">Скопировать список</button></div>
+        <label for="editorial-draft">Редакторский черновик</label>
+        <textarea id="editorial-draft" rows="6" placeholder="Черновик выпуска"></textarea>
+        <div class="result-actions"><button id="copy-digest" type="button">Скопировать список</button><button id="export-markdown" type="button">Экспорт Markdown</button></div>
       </section>
     </main>
     <script type="module" src="/app.js"></script>

@@ -10,6 +10,7 @@ async function readResponse(response) {
   if (!response.ok) {
     const error = new Error(body.error || 'Network request failed');
     error.status = response.status;
+    if (typeof body.code === 'string') error.code = body.code;
     throw error;
   }
   return body;
