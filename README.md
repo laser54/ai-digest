@@ -25,7 +25,7 @@ AI Digest combines a bounded server-side prefetch with per-source Codex indexed 
 - A review UI with manual and automatic selection, source hostname attribution, clipboard output, and token usage when the SDK returns every expected dimension.
 - A hardened container deployment and test-before-publish-before-deploy GitHub Actions workflow.
 
-The application uses Node.js 22, Express 5, vanilla JavaScript and CSS, Cheerio, Zod, and `@openai/codex-sdk`. Codex discovery uses `gpt-5.6-luna` by default; the only accepted model override is `gpt-5.6-terra`.
+The application uses Node.js 22, Express 5, vanilla JavaScript and CSS, Cheerio, Zod, and `@openai/codex-sdk`. Codex discovery uses `gpt-6-luna` by default through the pinned SDK/CLI `0.160.0`; the only accepted manual model override remains `gpt-5.6-terra`. There is no automatic downgrade on research failure.
 
 ## Workflow
 
@@ -139,7 +139,7 @@ Codex authentication is required for research. Keep its refreshable authenticati
 |---|---|---|
 | `ADMIN_PASSWORD` | none | Shared password required by digest start/status endpoints; mandatory at startup and explicitly required in production. |
 | `PORT` | `3030` | HTTP listen port. |
-| `CODEX_DISCOVERY_MODEL` | `gpt-5.6-luna` | Selects the discovery model; only `gpt-5.6-terra` is accepted as an override, and other values fall back to Luna. The default is intentionally unchanged pending a real compatibility check against the deployed Codex SDK; a different CLI/parent runtime accepting another model is not proof that this SDK accepts it. |
+| `CODEX_DISCOVERY_MODEL` | `gpt-6-luna` | Selects the discovery model; only the explicit manual `gpt-5.6-terra` override is accepted. All other values select GPT-6 Luna; failures never silently downgrade. SDK/CLI `0.160.0` accepted a real GPT-6 Luna request with the service's existing canonical ChatGPT authorization before this change; no logout or reauthentication was required. This does not guarantee availability for other accounts or future rollouts. |
 | `CODEX_RESEARCH_TIMEOUT_MS` | `120000` | Positive integer total timeout for each source research task. |
 | `DIGEST_HISTORY_DIR` | production `/codex/digests` | Optional override for durable file-backed history. In production, keep the default on the existing `/codex` persistent volume; no new database is required. |
 | `SETTINGS_FILE` | unset | Exact path for the shared non-secret settings JSON file. |
