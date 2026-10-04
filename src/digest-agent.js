@@ -39,14 +39,14 @@ export function codexOutputSchema() {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['url', 'title', 'publishedAt', 'reason'],
+          required: ['url', 'title', 'publishedAt', 'reason', 'evidence'],
           properties: {
             url: { type: 'string' },
             title: { type: 'string' },
             publishedAt: { type: 'string' },
             reason: { type: 'string' },
             evidence: {
-              type: 'object', additionalProperties: false,
+              type: ['object', 'null'], additionalProperties: false,
               required: ['organization', 'technology', 'implementation', 'quote'],
               properties: { organization: { type: 'string' }, technology: { type: 'string' }, implementation: { type: 'string' }, quote: { type: 'string' } }
             }
@@ -68,7 +68,7 @@ export function codexResearchPrompt({ sourceUrl, sourceArticles, themes, editori
   const recoveryText = recovery ? ' This is a recovery indexed-search attempt after an empty unreachable result.' : '';
   const criterion = typeof editorialPrompt === 'string' && editorialPrompt.trim() ? editorialPrompt.trim() : 'No additional editorial criterion was provided.';
   const evidenceInstruction = requiresImplementationEvidence(editorialPrompt)
-    ? ' For every candidate provide evidence.organization, evidence.technology, evidence.implementation, and an exact evidence.quote from the article page; do not infer missing facts or fabricate a quote. The server will fetch and validate the quote independently.' : '';
+    ? ' For every candidate provide evidence.organization, evidence.technology, evidence.implementation, and an exact evidence.quote from the article page, or evidence:null if unavailable; do not infer missing facts or fabricate a quote. The server will fetch and validate the quote independently.' : ' Return evidence:null when no implementation evidence is required; never fabricate facts to populate this field.';
   return `You are a careful personal news editor. Research recent news only for the user-approved source URL and its exact canonical host pair: ${hosts.join(' and ')}. Source: ${sourceUrl}. Themes: ${themes.join(', ') || 'all topics'}. Date window: ${from || 'no lower bound'} through ${to || 'no upper bound'}.${recoveryText} If direct access fails, explicitly use indexed web search with both site:${hosts[0]} and site:${hosts[1]} queries. You may use the pre-fetched candidates for this source below, but do not stop if they are empty. Return up to 12 real, directly verified article URLs only from ${hosts.join(' or ')}, with their exact titles and publication dates when available, while preserving the date and theme constraints. Never return another subdomain. Never invent URLs, titles, or dates.${evidenceInstruction}
 
 ADDITIONAL EDITORIAL CRITERION (operator-provided, apply only as an additional filter):
