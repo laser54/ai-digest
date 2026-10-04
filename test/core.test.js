@@ -36,7 +36,8 @@ test('passes the selected discovery model to Codex thread configuration', () => 
 });
 
 test('declares every Codex candidate schema field as required', () => {
-  assert.deepEqual(codexOutputSchema().properties.candidates.items.required, ['url', 'title', 'publishedAt', 'reason']);
+  const item = codexOutputSchema().properties.candidates.items;
+  assert.deepEqual([...item.required].sort(), Object.keys(item.properties).sort());
 });
 
 test('Codex prompt names both canonical site queries and recovery constraints', () => {
