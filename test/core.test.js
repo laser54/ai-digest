@@ -23,7 +23,7 @@ test('enables Codex web tools for source discovery', () => {
 });
 
 test('selects the verified Luna model by default and only permits the safe fallback override', () => {
-  assert.equal(CODEX_DISCOVERY_LUNA_MODEL, 'gpt-5.6-luna');
+  assert.equal(CODEX_DISCOVERY_LUNA_MODEL, 'gpt-6-luna');
   assert.equal(CODEX_DISCOVERY_FALLBACK_MODEL, 'gpt-5.6-terra');
   assert.equal(selectDiscoveryModel({}), CODEX_DISCOVERY_LUNA_MODEL);
   assert.equal(selectDiscoveryModel({ CODEX_DISCOVERY_MODEL: CODEX_DISCOVERY_FALLBACK_MODEL }), CODEX_DISCOVERY_FALLBACK_MODEL);

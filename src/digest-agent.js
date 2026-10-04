@@ -1,7 +1,7 @@
 import { canonicalHostsFor, normalizeAgentResult } from './digest-result.js';
 import { requiresImplementationEvidence } from './evidence.js';
 
-export const CODEX_DISCOVERY_LUNA_MODEL = 'gpt-5.6-luna';
+export const CODEX_DISCOVERY_LUNA_MODEL = 'gpt-6-luna';
 export const CODEX_DISCOVERY_FALLBACK_MODEL = 'gpt-5.6-terra';
 
 export function selectDiscoveryModel(environment = process.env) {
