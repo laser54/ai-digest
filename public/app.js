@@ -4,9 +4,12 @@ import { discoveryProgressMessage } from './discovery-progress.js';
 import { startAndPollDigest } from './digest-polling.js';
 import { tokenUsageMessage } from './token-usage.js';
 import { renderSourceReport } from './source-report.js';
-import { createArticleSource } from './article-presentation.js';
+
 import { formatDigestForClipboard } from './digest-clipboard.js';
 import { loadEditorialPrompt, saveEditorialPrompt } from './editorial-prompt-workspace.js';
+import { isRetryEligibleOutcome, safeHttpUrl } from './safe-links.js';
+import { renderArticleCard } from './article-card.js';
+import { renderNextPageButton } from './history-pagination.js';
 
 const form = document.querySelector('#digest-form');
 const status = document.querySelector('#status');
@@ -24,6 +27,177 @@ let automaticDigestUrls = [];
 let sources = loadSources(localStorage);
 let themes = loadThemes(localStorage);
 let editorialPrompt = loadEditorialPrompt(localStorage);
+let historyRecord = null;
+let historyCursor = null;
+const historyList = document.querySelector('#history-list');
+const historyStatus = document.querySelector('#history-status');
+const retryPanel = document.querySelector('#retry-panel');
+const retrySources = document.querySelector('#retry-sources');
+const retryAttempts = document.querySelector('#retry-attempts');
+const retryStatus = document.querySelector('#retry-status');
+const retryStart = document.querySelector('#retry-start');
+const executionPassword = () => document.querySelector('#execution-password').value;
+
+function renderRetryPanel() {
+  if (!historyRecord) { retryPanel.hidden = true; return; }
+  retryPanel.hidden = false;
+  const retryable = (historyRecord.result.researchSources || []).filter((source) => isRetryEligibleOutcome(source.outcome));
+  retrySources.replaceChildren(...retryable.map((source) => {
+    const label = document.createElement('label'); label.className = 'candidate';
+    const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = source.url;
+    const text = document.createElement('span'); text.textContent = `${source.url} · ${source.outcome} · ${source.error || 'Источник недоступен'}`;
+    label.append(checkbox, text); return label;
+  }));
+  retryStart.disabled = retryable.length === 0;
+  retryAttempts.replaceChildren(...(historyRecord.attempts || []).map((attempt) => {
+    const row = document.createElement('p');
+    row.textContent = `${attempt.status} · ${new Date(attempt.createdAt).toLocaleString()} · ${attempt.selectedSourceUrls.join(', ')}${attempt.error ? ` · ${attempt.error}` : ''}`;
+    return row;
+  }));
+  if (!retryable.length && !(historyRecord.attempts || []).length) retryStatus.textContent = 'Нет источников, доступных для повтора.';
+}
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function trackRetry(jobId, digestId) {
+  for (let poll = 0; poll < 180; poll += 1) {
+    await delay(2000);
+    try {
+      const state = await historyRequest('/api/digest/jobs/status', 'POST', { jobId });
+      if (state.status === 'complete' || state.status === 'error') {
+        await historySaveChain;
+        const saved = await historyRequest(`/api/digests/${encodeURIComponent(digestId)}/read`, 'POST', {});
+        if (historyRecord?.id !== digestId) return;
+        const selected = [...candidates.querySelectorAll('input[type="checkbox"]:checked')].map((box) => box.value).sort();
+        const clean = document.querySelector('#editorial-draft').value === (historyRecord.editorialDraft || '')
+          && JSON.stringify(selected) === JSON.stringify([...(historyRecord.selectedUrls || [])].sort());
+        if (!clean) {
+          retryStatus.textContent = 'Повтор завершён; результат сохранён. Сохраните текущие правки и заново откройте выпуск для обновления карточек.';
+          return;
+        }
+        historyRecord = saved;
+        articles = saved.result.articles || [];
+        automaticDigestUrls = saved.result.automaticDigestUrls || [];
+        candidates.replaceChildren(...articles.map((article) => renderArticleCard(article, { selected: saved.selectedUrls.includes(article.url) })));
+        document.querySelector('#editorial-draft').value = saved.editorialDraft || '';
+        updateSelectedCount();
+        renderRetryPanel();
+        retryStatus.textContent = state.status === 'complete' ? 'Повтор завершён; результат объединён с сохранённым выпуском.' : 'Повтор завершился ошибкой; прежний результат сохранён.';
+        return;
+      }
+      retryStatus.textContent = `Повтор выполняется: ${state.status}.`;
+    } catch (error) { retryStatus.textContent = `Статус повтора пока недоступен: ${error.message}`; return; }
+  }
+}
+
+retryStart.addEventListener('click', async () => {
+  if (!historyRecord) return;
+  const selectedSourceUrls = [...retrySources.querySelectorAll('input:checked')].map((input) => input.value);
+  if (!selectedSourceUrls.length) { retryStatus.textContent = 'Выберите хотя бы один источник.'; return; }
+  if (!executionPassword()) { retryStatus.textContent = 'Введите пароль для авторизации.'; return; }
+  retryStart.disabled = true;
+  retryStatus.textContent = 'Запуск повтора…';
+  const key = `digest-retry-${historyRecord.id}`;
+  const sameSelection = (attempt) => JSON.stringify([...attempt].sort()) === JSON.stringify([...selectedSourceUrls].sort());
+  let pending;
+  try { pending = JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { pending = null; }
+  const existing = pending && sameSelection(pending.selectedSourceUrls)
+    ? (historyRecord.attempts || []).find((attempt) => attempt.submissionId === pending.submissionId) : null;
+  if (!pending || !sameSelection(pending.selectedSourceUrls) || (existing && ['complete', 'error', 'interrupted'].includes(existing.status))) {
+    pending = { submissionId: `retry_${crypto.randomUUID().replaceAll('-', '')}`, selectedSourceUrls };
+    sessionStorage.setItem(key, JSON.stringify(pending));
+  }
+  try {
+    const response = await historyRequest(`/api/digests/${encodeURIComponent(historyRecord.id)}/retries`, 'POST', {
+      revision: historyRecord.revision, submissionId: pending.submissionId, selectedSourceUrls
+    });
+    retryStatus.textContent = `Повтор ${response.status || 'запущен'}${response.reused ? ' (существующая попытка)' : ''}.`;
+    historyRecord = await historyRequest(`/api/digests/${encodeURIComponent(historyRecord.id)}/read`, 'POST', {});
+    renderRetryPanel();
+    if (response.jobId) trackRetry(response.jobId, historyRecord.id);
+  } catch (error) {
+    retryStatus.textContent = `Не удалось запустить повтор: ${error.message}`;
+    if (error.code === 'history_revision_conflict') historyRecord = await historyRequest(`/api/digests/${encodeURIComponent(historyRecord.id)}/read`, 'POST', {}).catch(() => historyRecord);
+  } finally { retryStart.disabled = false; }
+});
+
+async function historyRequest(url, method = 'GET', data) {
+  const response = await fetch(url, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    ...(method === 'GET' ? {} : { body: JSON.stringify({ ...data, executionPassword: executionPassword() }) })
+  });
+  const body = response.status === 204 ? null : await response.json();
+  if (!response.ok) {
+    const error = new Error(body?.error || 'Ошибка истории выпусков');
+    if (typeof body?.code === 'string') error.code = body.code;
+    throw error;
+  }
+  return body;
+}
+
+async function refreshHistory(cursor = null) {
+  try {
+    historyCursor = cursor;
+    const page = await historyRequest('/api/digests/list', 'POST', { limit: 20, ...(cursor ? { cursor } : {}) });
+    historyList.replaceChildren(...page.items.map((item) => {
+      const row = document.createElement('div');
+      const open = document.createElement('button');
+      open.type = 'button'; open.textContent = `${item.name} · ${new Date(item.createdAt).toLocaleDateString()} · ${item.status || 'complete'}`;
+      open.addEventListener('click', async () => {
+        try {
+          historyRecord = await historyRequest(`/api/digests/${encodeURIComponent(item.id)}/read`, 'POST', {});
+          articles = historyRecord.result.articles || [];
+          automaticDigestUrls = historyRecord.result.automaticDigestUrls || [];
+          renderRetryPanel();
+          document.querySelector('#editorial-draft').value = historyRecord.editorialDraft || '';
+          candidates.replaceChildren(...articles.map((article) => renderArticleCard(article, { selected: historyRecord.selectedUrls.includes(article.url) })));
+          review.hidden = false; result.hidden = true;
+          historyStatus.textContent = `Открыт выпуск «${historyRecord.name}».`;
+          updateSelectedCount();
+        } catch (error) { historyStatus.textContent = error.message; }
+      });
+      const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Удалить';
+      remove.addEventListener('click', async () => {
+        if (!confirm(`Удалить выпуск «${item.name}»? Это действие необратимо.`)) return;
+        try { await historyRequest(`/api/digests/${encodeURIComponent(item.id)}`, 'DELETE', { revision: item.revision }); await refreshHistory(); }
+        catch (error) { historyStatus.textContent = error.message; }
+      });
+      const rename = document.createElement('button'); rename.type = 'button'; rename.textContent = 'Переименовать';
+      rename.addEventListener('click', async () => {
+        const name = prompt('Название выпуска', item.name);
+        if (name === null) return;
+        try { await historyRequest(`/api/digests/${encodeURIComponent(item.id)}`, 'PATCH', { revision: item.revision, name }); await refreshHistory(historyCursor); }
+        catch (error) { historyStatus.textContent = error.message; }
+      });
+      row.append(open, rename, remove); return row;
+    }));
+    renderNextPageButton(historyList, page.nextCursor, refreshHistory);
+    if (!page.items.length) historyStatus.textContent = 'История пока пуста.';
+  } catch (error) { historyStatus.textContent = `История недоступна: ${error.message}`; }
+}
+
+document.querySelector('#history-refresh').addEventListener('click', () => refreshHistory());
+document.querySelector('#execution-password').addEventListener('change', () => {
+  if (executionPassword()) refreshHistory();
+});
+refreshHistory();
+
+let historySaveChain = Promise.resolve();
+async function saveHistoryEdits() {
+  if (!historyRecord) return;
+  historyStatus.textContent = 'Сохранение…';
+  historySaveChain = historySaveChain.then(async () => {
+    const patch = {
+      revision: historyRecord.revision,
+      selectedUrls: [...candidates.querySelectorAll('input[type="checkbox"]:checked')].map((box) => box.value),
+      editorialDraft: document.querySelector('#editorial-draft').value
+    };
+    historyRecord = await historyRequest(`/api/digests/${encodeURIComponent(historyRecord.id)}`, 'PATCH', patch);
+    historyStatus.textContent = 'Сохранено.';
+  }).catch((error) => { historyStatus.textContent = `Не сохранено: ${error.message}`; });
+  return historySaveChain;
+}
+document.querySelector('#editorial-draft').addEventListener('change', saveHistoryEdits);
 
 const sourceList = document.querySelector('#source-list');
 const sourceEmpty = document.querySelector('#source-empty');
@@ -159,17 +333,23 @@ const renderDigest = (urls) => {
   const selected = articles.filter((article) => urls.includes(article.url));
   links.replaceChildren(...selected.map((article) => {
     const item = document.createElement('li');
-    const anchor = document.createElement('a');
-    anchor.href = article.url;
-    anchor.target = '_blank';
-    anchor.rel = 'noopener noreferrer';
-    anchor.textContent = article.title;
-    item.append(anchor, article.publishedAt ? ` — ${article.publishedAt}` : '', createArticleSource(article.url, 'digest'));
+    const anchor = safeAnchor(article.url, article.title);
+    if (anchor) item.append(anchor);
+    item.append(article.publishedAt ? ` — ${article.publishedAt}` : '', createArticleSource(article.url, 'digest'));
     return item;
   }));
   result.hidden = false;
   scrollTo(result);
 };
+
+function safeAnchor(url, title) {
+  const href = safeHttpUrl(url);
+  if (!href) return null;
+  const anchor = document.createElement('a');
+  anchor.href = href; anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; anchor.textContent = title;
+  return anchor;
+}
+
 
 const renderDiscoveryProgress = (event) => {
   progressPanel.hidden = false;
@@ -188,12 +368,14 @@ const updateSelectedCount = () => {
 };
 
 candidates.addEventListener('change', updateSelectedCount);
+candidates.addEventListener('change', saveHistoryEdits);
 
 selectAllButton.addEventListener('click', () => {
   const boxes = [...candidates.querySelectorAll('input[type="checkbox"]')];
   const target = boxes.some((box) => !box.checked);
   boxes.forEach((box) => { box.checked = target; });
   updateSelectedCount();
+  saveHistoryEdits();
 });
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -219,6 +401,17 @@ const copyDigest = async () => {
 
 document.querySelector('#copy-digest').addEventListener('click', copyDigest);
 
+document.querySelector('#export-markdown').addEventListener('click', () => {
+  const markdown = [...links.querySelectorAll('a')].map((anchor, index) => {
+    const title = anchor.textContent.replace(/([\\[\\]])/g, '\\$1');
+    return `${index + 1}. [${title}](${anchor.href})`;
+  }).join('\n');
+  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob); link.download = 'ai-digest.md'; link.click();
+  URL.revokeObjectURL(link.href);
+});
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   form.setAttribute('aria-busy', 'true');
@@ -243,28 +436,28 @@ form.addEventListener('submit', async (event) => {
     }, { onProgress: renderDiscoveryProgress });
     articles = body.articles;
     automaticDigestUrls = body.automaticDigestUrls;
+    historyStatus.textContent = 'Сохранение выпуска…';
+    historyRecord = null;
+    try {
+      if (body.historyId) historyRecord = await historyRequest(`/api/digests/${encodeURIComponent(body.historyId)}/read`, 'POST', {});
+      else historyRecord = await historyRequest('/api/digests', 'POST', {
+          name: `Выпуск ${new Date().toLocaleString()}`,
+          snapshot: { sourceUrls, themes: themesForDigest(themes), editorialPrompt, from: document.querySelector('#from').value, to: document.querySelector('#to').value },
+          result: body,
+          selectedUrls: [],
+          editorialDraft: ''
+        });
+      historyStatus.textContent = 'Выпуск сохранён. Отбор и черновик будут сохраняться автоматически.';
+      await refreshHistory();
+      renderRetryPanel();
+    } catch (error) { historyStatus.textContent = `Выпуск получен, но не сохранён: ${error.message}`; }
     tokenUsage.textContent = tokenUsageMessage(body.tokenUsage);
     tokenUsage.hidden = false;
     if (sourceReportContainer) {
       renderSourceReport(sourceReportContainer, body.sources, body.researchSources);
       sourceReportContainer.hidden = false;
     }
-    candidates.replaceChildren(...articles.map((article) => {
-      const label = document.createElement('label');
-      label.className = 'candidate';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox'; checkbox.value = article.url;
-      const link = document.createElement('a');
-      link.href = article.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = article.title;
-      const meta = document.createElement('span');
-      meta.className = 'candidate-meta';
-      const reason = document.createElement('span');
-      reason.className = 'candidate-reason';
-      reason.textContent = article.reason;
-      meta.append(article.publishedAt ? `${article.publishedAt} · ` : '', reason);
-      label.append(checkbox, link, createArticleSource(article.url, 'candidate'), meta);
-      return label;
-    }));
+    candidates.replaceChildren(...articles.map((article) => renderArticleCard(article)));
     updateSelectedCount();
     review.hidden = false;
     scrollTo(review);
@@ -279,4 +472,10 @@ form.addEventListener('submit', async (event) => {
 });
 
 document.querySelector('#manual').addEventListener('click', () => renderDigest([...document.querySelectorAll('#candidates input:checked')].map((input) => input.value)));
-document.querySelector('#auto').addEventListener('click', () => renderDigest(automaticDigestUrls));
+document.querySelector('#auto').addEventListener('click', () => {
+  const selected = new Set(automaticDigestUrls);
+  candidates.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = selected.has(box.value); });
+  updateSelectedCount();
+  saveHistoryEdits();
+  renderDigest(automaticDigestUrls);
+});

@@ -123,8 +123,8 @@ test('normalizes an agent response to unique candidates from fetched articles on
   }, allowed);
 
   assert.deepEqual(result.candidates, [
-    { title: 'First', url: 'https://example.com/first', publishedAt: '2026-08-01', reason: 'Relevant' },
-    { title: 'Second', url: 'https://example.com/second', publishedAt: '2026-08-02', reason: 'Relevant too' }
+    { title: 'First', url: 'https://example.com/first', publishedAt: '2026-08-01', reason: 'Relevant', evidence: null, verification: 'unverified' },
+    { title: 'Second', url: 'https://example.com/second', publishedAt: '2026-08-02', reason: 'Relevant too', evidence: null, verification: 'unverified' }
   ]);
   assert.deepEqual(result.automaticDigestUrls, ['https://example.com/second']);
 });
@@ -138,7 +138,7 @@ test('keeps Codex-discovered articles only when their host was explicitly suppli
     automaticDigestUrls: ['https://rosenergo.gov.ru/press-center/news/item-1', 'https://example.org/copied-item']
   }, [], ['https://rosenergo.gov.ru/press-center/news']);
   assert.deepEqual(result.candidates, [{
-    title: 'Official news', url: 'https://rosenergo.gov.ru/press-center/news/item-1', publishedAt: '2026-08-03', reason: 'Relevant'
+    title: 'Official news', url: 'https://rosenergo.gov.ru/press-center/news/item-1', publishedAt: '2026-08-03', reason: 'Relevant', evidence: null, verification: 'unverified'
   }]);
   assert.deepEqual(result.automaticDigestUrls, ['https://rosenergo.gov.ru/press-center/news/item-1']);
 });
